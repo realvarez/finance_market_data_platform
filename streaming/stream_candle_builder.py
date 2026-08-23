@@ -26,8 +26,8 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
-from streaming.utils import connect_to_kafka, create_spark_connection, write_to_kafka
-from utils import config
+from ingestion import config
+from streaming.spark_utils import connect_to_kafka, create_spark_connection, write_to_kafka
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 logger = logging.getLogger(__name__)
