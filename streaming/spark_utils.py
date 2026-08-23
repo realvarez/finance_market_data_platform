@@ -13,9 +13,12 @@ MINIO_SECRET_KEY = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
 
 def create_spark_connection(name: str) -> SparkSession | None:
     try:
+        # Versions matched to the spark:4.0.2 image runtime (Hadoop 3.4.1).
+        # NOTE: under `spark-submit`, spark.jars.packages set here is IGNORED —
+        # pass the same list via --packages (see candle-builder in docker-compose.yml).
         packages = [
-            "org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.0-preview2",
-            "org.apache.hadoop:hadoop-aws:3.4.0",
+            "org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.2",
+            "org.apache.hadoop:hadoop-aws:3.4.1",
             "com.amazonaws:aws-java-sdk-bundle:1.12.780",
         ]
 
