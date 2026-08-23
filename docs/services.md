@@ -11,9 +11,11 @@
 | postgres | postgres_db | — | 5432 | Airflow metadata DB |
 | minio | minio | 9000, 9001 | 9000, 9001 | S3-compatible object storage |
 | clickhouse | clickhouse | 8123, 9009 | 8123, 9000 | Analytical database |
-| spark-master | spark-master | 8082, 7077 | 8080, 7077 | Spark master |
-| spark-worker | spark-worker | — | 8081 | Spark worker |
+| spark-master | spark-master | 8082, 7077 | 8080, 7077 | Spark master daemon |
+| spark-worker | spark-worker | — | 8081 | Spark worker (2 cores / 1g) |
+| candle-builder | candle-builder | — | — | spark-submit driver for streaming OHLCV aggregation |
 | tick-ingestion | tick-ingestion | — | — | Yahoo WebSocket tick service |
+| tick-sink | tick-sink | — | — | market.ticks → MinIO Parquet archive + ClickHouse |
 | kafka-init | kafka-init | — | — | One-shot topic bootstrap |
 
 ## Web UIs

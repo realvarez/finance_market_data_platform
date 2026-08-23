@@ -137,14 +137,23 @@ services:
   spark-master:
     image: spark:4.0.2-java21-python3
     container_name: spark-master
+    # Official spark image has no default CMD and ignores Bitnami-style SPARK_MODE;
+    # start the master daemon explicitly.
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+      --host spark-master --webui-port 8080
     environment:
-      SPARK_MODE: master
-      SPARK_MASTER_HOST: spark-master
       PYTHONPATH: /app
       KAFKA_BOOTSTRAP_SERVERS: broker:29092
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import socket; socket.create_connection((\"localhost\", 8080), 2)'"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     ports:
       - "8082:8080"
       - "7077:7077"
@@ -157,13 +166,13 @@ services:
   spark-worker:
     image: spark:4.0.2-java21-python3
     container_name: spark-worker
+    command: >
+      /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
+      -c 2 -m 1g spark://spark-master:7077
     depends_on:
-      - spark-master
+      spark-master:
+        condition: service_healthy
     environment:
-      SPARK_MODE: worker
-      SPARK_MASTER_URL: spark://spark-master:7077
-      SPARK_WORKER_CORES: 2
-      SPARK_WORKER_MEMORY: 1g
       PYTHONPATH: /app
       KAFKA_BOOTSTRAP_SERVERS: broker:29092
       MINIO_ENDPOINT: http://minio:9000
@@ -191,7 +200,7 @@ services:
       minio:
         condition: service_started
       spark-master:
-        condition: service_started
+        condition: service_healthy
       spark-worker:
         condition: service_started
     environment:

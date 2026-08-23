@@ -74,14 +74,17 @@ environment:
 
 ## Run Spark Streaming Locally
 
+The `candle-builder` service submits the streaming job automatically on startup:
+
 ```bash
-uv run python -m streaming.stream_candle_builder
+docker compose up -d candle-builder
+docker compose logs -f candle-builder
 ```
 
-Or submit to the Spark cluster:
+To submit manually instead (e.g. for development):
 
 ```bash
-docker compose exec spark-master spark-submit \
+docker compose exec spark-master /opt/spark/bin/spark-submit \
   --master spark://spark-master:7077 \
   /opt/spark/apps/stream_candle_builder.py
 ```
