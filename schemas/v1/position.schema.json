@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "position.schema.json",
+  "title": "Position",
+  "type": "object",
+  "required": ["symbol", "quantity", "average_entry_price", "current_price", "unrealized_pnl", "updated_at"],
+  "properties": {
+    "symbol": { "type": "string", "pattern": "^[A-Z0-9.-]+$" },
+    "quantity": { "type": "number" },
+    "average_entry_price": { "type": "number", "minimum": 0 },
+    "current_price": { "type": "number", "minimum": 0 },
+    "unrealized_pnl": { "type": "number" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,11 @@
+{
+  "event_id": "MU20260625004813",
+  "symbol": "MU",
+  "timestamp": "2026-06-25T00:48:13Z",
+  "ingestion_timestamp": "2026-06-25T00:48:13.100Z",
+  "price": 1227.01,
+  "volume": null,
+  "bid": null,
+  "ask": null,
+  "source": "yahoo_finance"
+}

@@ -1,0 +1,13 @@
+{
+  "event_id": "NVDA20260625132800",
+  "symbol": "NVDA",
+  "timestamp": "2026-06-25T13:28:00Z",
+  "interval": "1m",
+  "open": 195.5749969482422,
+  "high": 195.5800018310547,
+  "low": 195.33999633789062,
+  "close": 195.3699951171875,
+  "volume": 162257,
+  "source": "yahoo_finance",
+  "created_at": "2026-06-25T13:28:10Z"
+}

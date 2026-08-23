@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "market_tick.schema.json",
+  "title": "MarketTick",
+  "type": "object",
+  "required": ["event_id", "symbol", "timestamp", "ingestion_timestamp", "price", "source"],
+  "properties": {
+    "event_id": { "type": "string", "minLength": 1 },
+    "symbol": { "type": "string", "pattern": "^[A-Z0-9.-]+$" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "ingestion_timestamp": { "type": "string", "format": "date-time" },
+    "price": { "type": "number", "minimum": 0 },
+    "volume": { "type": ["number", "null"], "minimum": 0 },
+    "bid": { "type": ["number", "null"], "minimum": 0 },
+    "ask": { "type": ["number", "null"], "minimum": 0 },
+    "source": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": false
+}

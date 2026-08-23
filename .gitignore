@@ -9,3 +9,11 @@ wheels/
 # Virtual environments
 .venv
 .idea
+.vscode
+
+# Tool caches
+.ruff_cache/
+.pytest_cache/
+
+# Local agent tooling state
+.zcode/

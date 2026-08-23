@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "market_signal.schema.json",
+  "title": "MarketSignal",
+  "type": "object",
+  "required": ["event_id", "symbol", "timestamp", "strategy", "signal", "confidence", "price"],
+  "properties": {
+    "event_id": { "type": "string", "minLength": 1 },
+    "symbol": { "type": "string", "pattern": "^[A-Z0-9.-]+$" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "strategy": { "type": "string", "minLength": 1 },
+    "signal": { "type": "string", "enum": ["BUY", "SELL", "HOLD"] },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "price": { "type": "number", "minimum": 0 },
+    "features": { "type": "object" },
+    "expected_holding_period": { "type": "string" }
+  },
+  "additionalProperties": false
+}

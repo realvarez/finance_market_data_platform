@@ -12,5 +12,7 @@ WORKDIR /opt/airflow
 
 COPY requirements.txt ./
 RUN pip install --upgrade pip && \
+    pip install jsonschema minio clickhouse-connect pyarrow numpy && \
     pip install -r requirements.txt
 
+ENV PYTHONPATH=/opt/airflow

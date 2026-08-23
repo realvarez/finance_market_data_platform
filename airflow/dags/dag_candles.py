@@ -1,48 +1,53 @@
-import json
+import datetime
 import pendulum
-import yfinance as yf
-from airflow.sdk import dag, task
-from kafka import KafkaProducer
+from airflow.sdk import dag, task, Param
+from ingestion import config
+from ingestion.candles import fetch_latest_candles
 
-@task(task_id='get_candles')
-def market_candle(symbol:str = 'NVDA', interval:str = '1m'):
-    ticker= yf.Ticker(symbol)
-    history=ticker.history(
-        start='2026-07-01',
-        end='2026-07-05',
-        interval=interval
-    )[['Open', 'High', 'Low', 'Close', 'Volume']]
 
-    producer = KafkaProducer(bootstrap_servers=['broker:29092'], max_block_ms=5000)
-
-    for row in history.itertuples():
-        candle = {
-            'id': f'{symbol}{row.Index.strftime('%Y%m%d%H%M%S')}',
-            'symbol': symbol,
-            'timestamp': row.Index.strftime('%Y-%m-%d %H:%M:%S'),
-            'interval': interval,
-            'open': row.Open,
-            'high': row.High,
-            'low': row.Low,
-            'close': row.Close,
-            'volume': row.Volume
-        }
-        producer.send(
-            topic=f'market-candle-{interval}',
-            value=json.dumps(candle).encode('utf-8')
-        )
-
-    producer.flush()
-    producer.close()
+@task()
+def fetch_candles(interval: str, **context):
+    params = context.get("params", {})
+    symbols_str = params.get("symbols", ",".join(config.DEFAULT_SYMBOLS))
+    overlap = int(params.get("overlap_minutes", 5))
+    symbol_list = [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
+    return fetch_latest_candles(
+        symbol=symbol_list[0],
+        interval=interval,
+        overlap_minutes=overlap,
+        symbols=symbol_list,
+    )
 
 
 @dag(
-    schedule=None,
-    start_date=pendulum.datetime(2021, 1, 1, tz="UTC"),
+    schedule=datetime.timedelta(minutes=1),
+    start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
     catchup=False,
-    tags=["example"],
+    tags=["Ingestion", "Candles"],
+    params={
+        "symbols": Param(default=",".join(config.DEFAULT_SYMBOLS), type="string"),
+        "overlap_minutes": Param(default=5, type="integer"),
+    },
 )
-def market_candles_dag():
-    market_candle(symbol='NVDA', interval='1m')
+def market_candles_1m_dag():
+    fetch_candles(interval="1m")
 
-market_candles_dag()
+
+market_candles_1m_dag()
+
+
+@dag(
+    schedule=datetime.timedelta(minutes=5),
+    start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
+    catchup=False,
+    tags=["Ingestion", "Candles"],
+    params={
+        "symbols": Param(default=",".join(config.DEFAULT_SYMBOLS), type="string"),
+        "overlap_minutes": Param(default=5, type="integer"),
+    },
+)
+def market_candles_5m_dag():
+    fetch_candles(interval="5m")
+
+
+market_candles_5m_dag()

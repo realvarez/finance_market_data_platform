@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "trade.schema.json",
+  "title": "Trade",
+  "type": "object",
+  "required": ["trade_id", "order_id", "symbol", "timestamp", "side", "quantity", "price"],
+  "properties": {
+    "trade_id": { "type": "string", "minLength": 1 },
+    "order_id": { "type": "string", "minLength": 1 },
+    "symbol": { "type": "string", "pattern": "^[A-Z0-9.-]+$" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "side": { "type": "string", "enum": ["BUY", "SELL"] },
+    "quantity": { "type": "number", "minimum": 0 },
+    "price": { "type": "number", "minimum": 0 },
+    "commission": { "type": ["number", "null"], "minimum": 0 }
+  },
+  "additionalProperties": false
+}

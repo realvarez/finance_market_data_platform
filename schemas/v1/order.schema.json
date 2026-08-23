@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "order.schema.json",
+  "title": "Order",
+  "type": "object",
+  "required": ["order_id", "symbol", "timestamp", "side", "quantity", "order_type", "status"],
+  "properties": {
+    "order_id": { "type": "string", "minLength": 1 },
+    "symbol": { "type": "string", "pattern": "^[A-Z0-9.-]+$" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "side": { "type": "string", "enum": ["BUY", "SELL"] },
+    "quantity": { "type": "number", "minimum": 0 },
+    "order_type": { "type": "string", "enum": ["MARKET", "LIMIT", "STOP"] },
+    "limit_price": { "type": ["number", "null"], "minimum": 0 },
+    "status": { "type": "string", "enum": ["PENDING", "FILLED", "CANCELLED", "REJECTED"] },
+    "strategy": { "type": "string" }
+  },
+  "additionalProperties": false
+}
