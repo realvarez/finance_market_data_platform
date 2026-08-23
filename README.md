@@ -31,11 +31,11 @@ docker compose logs -f tick-ingestion
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| Airflow | http://localhost:8080 | admin1 / admin1 |
+| Airflow | http://localhost:8080 | — (dev mode: all-admins, no login) |
 | Kafka Control Center | http://localhost:9021 | — |
 | MinIO Console | http://localhost:9001 | minioadmin / minioadmin |
 | ClickHouse | http://localhost:8123 | default / (empty) |
-| Spark Master | http://localhost:8081 | — |
+| Spark Master | http://localhost:8082 | — |
 
 ## Documentation
 

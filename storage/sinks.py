@@ -17,7 +17,7 @@ def sink_ticks(records: list[dict]) -> None:
 
 
 def sink_candles(records: list[dict], source: str = "raw") -> None:
-    prefix = f"raw/candles" if source != "reconciled" else "reconciled/candles"
+    prefix = "raw/candles" if source != "reconciled" else "reconciled/candles"
     for record in records:
         extra = {
             "prefix": prefix,

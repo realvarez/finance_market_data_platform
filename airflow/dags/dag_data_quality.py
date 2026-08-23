@@ -1,5 +1,5 @@
 import pendulum
-from airflow.sdk import dag, task, Param
+from airflow.sdk import Param, dag, task
 
 from analysis.data_quality import run_checks
 from analysis.features import generate_features

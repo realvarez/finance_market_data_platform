@@ -10,9 +10,18 @@ USER airflow
 
 WORKDIR /opt/airflow
 
-COPY requirements.txt ./
+# Runtime dependencies for DAG code, aligned with pyproject.toml / uv.lock:
+# yfinance (candle fetch), kafka client (reconciliation), clickhouse/minio/pyarrow/numpy
+# (storage + features), jsonschema (contracts).
 RUN pip install --upgrade pip && \
-    pip install jsonschema minio clickhouse-connect pyarrow numpy && \
-    pip install -r requirements.txt
+    pip install \
+        aiokafka \
+        clickhouse-connect \
+        jsonschema \
+        kafka-python-ng \
+        minio \
+        numpy \
+        pyarrow \
+        yfinance
 
 ENV PYTHONPATH=/opt/airflow

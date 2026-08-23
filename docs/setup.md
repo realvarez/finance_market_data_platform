@@ -34,12 +34,12 @@ All services should show `healthy` or `running`.
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| Airflow | http://localhost:8080 | admin1 / admin1 |
+| Airflow | http://localhost:8080 | — (dev mode: all-admins, no login) |
 | Kafka Control Center | http://localhost:9021 | — |
 | Schema Registry | http://localhost:8081 | — |
 | MinIO Console | http://localhost:9001 | minioadmin / minioadmin |
 | ClickHouse HTTP | http://localhost:8123 | default / (empty) |
-| Spark Master UI | http://localhost:8081 | — |
+| Spark Master UI | http://localhost:8082 | — |
 
 See [services.md](services.md) for full port map.
 
@@ -69,9 +69,8 @@ environment:
 
 ## Enable Airflow DAGs
 
-1. Open http://localhost:8080
-2. Log in with admin1 / admin1
-3. Unpause the candle and reconciliation DAGs
+1. Open http://localhost:8080 (no login required in dev mode)
+2. Unpause the candle and reconciliation DAGs
 
 ## Run Spark Streaming Locally
 

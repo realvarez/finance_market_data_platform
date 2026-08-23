@@ -49,4 +49,3 @@ __all__ = [
     "TOPIC_SIGNALS",
     "TOPIC_TICKS",
 ]
-

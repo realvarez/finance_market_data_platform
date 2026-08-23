@@ -146,7 +146,7 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "8081:8080"
+      - "8082:8080"
       - "7077:7077"
     volumes:
       - .:/app
@@ -227,7 +227,7 @@ services:
       AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
       AIRFLOW__WEBSERVER__SECRET_KEY: 'developer-secret-key'
       AIRFLOW__API__SECRET_KEY: 'developer-secret-key'
-      AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+      # SimpleAuthManager with all-admins: no login required in local dev.
       KAFKA_BOOTSTRAP_SERVERS: broker:29092
       PYTHONPATH: /opt/airflow
     volumes:

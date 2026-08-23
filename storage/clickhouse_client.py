@@ -20,8 +20,15 @@ def insert_ticks(records: list[dict]) -> None:
         return
     client = get_client()
     columns = [
-        "event_id", "symbol", "timestamp", "ingestion_timestamp",
-        "price", "volume", "bid", "ask", "source",
+        "event_id",
+        "symbol",
+        "timestamp",
+        "ingestion_timestamp",
+        "price",
+        "volume",
+        "bid",
+        "ask",
+        "source",
     ]
     rows = [[r.get(c) for c in columns] for r in records]
     client.insert("market_ticks", rows, column_names=columns)
@@ -33,9 +40,18 @@ def insert_candles(records: list[dict]) -> None:
         return
     client = get_client()
     columns = [
-        "event_id", "symbol", "interval", "timestamp",
-        "open", "high", "low", "close", "volume",
-        "source", "created_at", "reconciliation_status",
+        "event_id",
+        "symbol",
+        "interval",
+        "timestamp",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "source",
+        "created_at",
+        "reconciliation_status",
     ]
     rows = [[r.get(c) for c in columns] for r in records]
     client.insert("market_candles", rows, column_names=columns)

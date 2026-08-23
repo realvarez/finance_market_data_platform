@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 import jsonschema
 
@@ -38,3 +37,15 @@ def validate_candle(data: dict) -> dict:
 
 def validate_signal(data: dict) -> dict:
     return validate(data, "signal")
+
+
+def validate_order(data: dict) -> dict:
+    return validate(data, "order")
+
+
+def validate_trade(data: dict) -> dict:
+    return validate(data, "trade")
+
+
+def validate_position(data: dict) -> dict:
+    return validate(data, "position")

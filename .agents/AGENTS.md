@@ -25,7 +25,7 @@ Any agent modifying code in this workspace must abide by the following Architect
 *   **Kafka:** All services communicate via Kafka topics. Use internal bootstrap server `broker:29092` within Docker, and `localhost:9092` for host-level scripts/tests.
 *   **Dual Storage:** Persist raw stream events as columnar Parquet files in **MinIO** (partitioned by `symbol/year/month/day`), and write calculated/reconciled time series to **ClickHouse** for analytical query performance.
 
-### ADR-003: Thin DAGs & No Business Logic in Airflow
+### ADR-005: Thin DAGs & No Business Logic in Airflow
 *   **Constraint:** Airflow DAGs must only handle scheduling, task orchestration, dependencies, and configuration parameters.
 *   **Rule:** **Zero business logic inside DAG files.** All processing, network client fetching, validation, and math must live in importable Python modules (e.g., [ingestion/candles.py](/ingestion/candles.py), [analysis/data_quality.py](/analysis/data_quality.py)).
 *   **DAG Directory:** [airflow/dags/](/airflow/dags/)
@@ -86,7 +86,7 @@ Do not place code files in arbitrary folders. Follow the directory layout conven
         uv run ruff format .
         ```
 6.  **Dependency Control:**
-    *   All dependencies are managed via `uv`. Do not manually edit `requirements.txt`. Use `uv add <package>` or modify `pyproject.toml` and run `uv sync` to lock dependencies.
+    *   All dependencies are managed via `uv`. Use `uv add <package>` or modify `pyproject.toml` and run `uv sync` to lock dependencies. The legacy `requirements.txt` has been removed; Docker images install from `pyproject.toml`/`uv.lock`.
 
 ---
 

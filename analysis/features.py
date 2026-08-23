@@ -20,13 +20,22 @@ def _compute_ema(prices: list[float], period: int) -> float | None:
 
 
 def _compute_rsi(prices: list[float], period: int = 14) -> float | None:
+    """RSI with Wilder smoothing (the standard definition).
+
+    Seeds the average gain/loss with a simple mean over the first `period`
+    deltas, then applies Wilder's recursive smoothing over the rest of the
+    history so the indicator converges like reference implementations.
+    """
     if len(prices) < period + 1:
         return None
-    deltas = np.diff(prices[-(period + 1):])
-    gains = np.where(deltas > 0, deltas, 0)
-    losses = np.where(deltas < 0, -deltas, 0)
-    avg_gain = np.mean(gains)
-    avg_loss = np.mean(losses)
+    deltas = np.diff(np.asarray(prices, dtype=float))
+    gains = np.where(deltas > 0, deltas, 0.0)
+    losses = np.where(deltas < 0, -deltas, 0.0)
+    avg_gain = float(np.mean(gains[:period]))
+    avg_loss = float(np.mean(losses[:period]))
+    for i in range(period, len(deltas)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
     if avg_loss == 0:
         return 100.0
     rs = avg_gain / avg_loss
@@ -50,14 +59,16 @@ def compute_features(symbol: str, interval: str = "1m", limit: int = 50) -> list
 
     def add(name: str, value: float | None):
         if value is not None:
-            features.append({
-                "symbol": symbol,
-                "timestamp": str(latest_ts),
-                "interval": interval,
-                "feature_name": name,
-                "feature_value": float(value),
-                "computed_at": now,
-            })
+            features.append(
+                {
+                    "symbol": symbol,
+                    "timestamp": str(latest_ts),
+                    "interval": interval,
+                    "feature_name": name,
+                    "feature_value": float(value),
+                    "computed_at": now,
+                }
+            )
 
     add("return_1", (closes[-1] - closes[-2]) / closes[-2] if closes[-2] else 0)
     if len(closes) >= 6:
@@ -76,7 +87,8 @@ def compute_features(symbol: str, interval: str = "1m", limit: int = 50) -> list
 
     if len(closes) >= 2:
         returns = np.diff(closes) / np.array(closes[:-1])
-        add("rolling_std_10", float(np.std(returns[-10:])) if len(returns) >= 10 else float(np.std(returns)))
+        std = np.std(returns[-10:]) if len(returns) >= 10 else np.std(returns)
+        add("rolling_std_10", float(std))
 
     return features
 

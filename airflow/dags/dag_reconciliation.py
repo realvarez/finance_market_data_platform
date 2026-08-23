@@ -1,5 +1,5 @@
 import pendulum
-from airflow.sdk import dag, task, Param
+from airflow.sdk import Param, dag, task
 
 from ingestion import config
 from streaming.reconciliation import reconcile_candles

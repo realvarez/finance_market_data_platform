@@ -1,6 +1,6 @@
 # Development Roadmap
 
-29 phases organized into 6 milestones. Status as of August 2026.
+26 phases organized into 6 milestones. Status as of August 2026.
 
 ## Milestone A — Foundation & Event Bus (Phases 1–3)
 
@@ -9,8 +9,8 @@
 
 - [x] Git repository, `pyproject.toml`, `uv.lock`
 - [x] Docker Compose (Kafka, Airflow, Postgres)
-- [ ] Ruff linting configuration
-- [ ] Pytest configuration and `tests/` directory
+- [x] Ruff linting configuration
+- [x] Pytest configuration and `tests/` directory
 - [x] Repository structure (context/, docs/, infra/)
 - [x] README with architecture and quick start
 
@@ -23,7 +23,7 @@
 
 - [x] Kafka broker in Docker (KRaft)
 - [x] Schema Registry + Control Center
-- [ ] Persistent volumes for Kafka data
+- [x] Persistent volumes for Kafka data
 - [x] Topic init script (`infra/kafka/init-topics.sh`)
 - [x] Standard topic definitions
 - [ ] Test producer/consumer in `tests/`
@@ -47,8 +47,8 @@
 
 - [x] JSON Schema for MarketTick, MarketCandle
 - [x] JSON Schema for MarketSignal, Order, Trade, Position
-- [ ] Schema validation in ingestion producers
-- [ ] Schema validation tests
+- [x] Schema validation in ingestion producers
+- [x] Schema validation tests
 
 **Acceptance:** Versioned schemas in `schemas/v1/`; all producers validate before publish.
 
@@ -64,8 +64,8 @@
 - [x] Standalone tick service (`entrypoint/tick_service.py`)
 - [x] Kafka producer with error topic routing
 - [x] Configurable symbols via environment
-- [ ] Reconnect logic with exponential backoff
-- [ ] Graceful shutdown on SIGTERM
+- [x] Reconnect loop (fixed-interval; exponential backoff still pending)
+- [x] Graceful shutdown on SIGTERM
 
 **Acceptance:** Tick service runs independently; publishes validated ticks to `market.ticks`.
 
@@ -92,7 +92,7 @@
 - [x] Data quality DAG
 - [x] Tick service removed from Airflow (standalone)
 - [ ] Historical backfill DAG
-- [ ] Feature generation DAG
+- [x] Feature generation DAG (inside `dag_data_quality.py`)
 
 **Acceptance:** No business logic in DAG files; all logic in importable modules.
 
@@ -265,14 +265,18 @@
 
 ## Recommended Sprint Order
 
-1. **Sprint 1** — Documentation + Kafka standardization
-2. **Sprint 2** — Schemas + ingestion refactor
-3. **Sprint 3** — Standalone tick service
-4. **Sprint 4** — Candle DAG fix + MinIO
-5. **Sprint 5** — Spark streaming candles
-6. **Sprint 6** — ClickHouse + sinks
-7. **Sprint 7** — Reconciliation
-8. **Sprint 8** — Data quality + features
+Sprints 1–8 (foundation through features) are complete. The path from here to paper trading +
+dashboard is staged in [CURRENT_STATE.md](CURRENT_STATE.md) → "Next Steps":
+
+1. **Stage 0** — Stabilize: tests, dependency drift, doc/port fixes *(in progress)*
+2. **Stage 1** — Close data-layer gaps (Phase 13 completion, MinIO tick sink, Spark service, trading DDL)
+3. **Stage 2** — Signal engine (Phase 14)
+4. **Stage 3** — Backtesting + look-ahead bias prevention (Phases 15–16)
+5. **Stage 4** — Risk engine, paper trading, portfolio (Phases 17–19)
+6. **Stage 5** — API layer + dashboard (Phases 21–22)
+7. **Stage 6** — Ops hardening
+
+Deferred: dbt (P12), live broker (P20), ML (P24), cloud (P26).
 
 ## Dependencies
 

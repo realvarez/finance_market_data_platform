@@ -30,10 +30,7 @@ def ensure_bucket(client: Minio | None = None) -> None:
 def _partition_path(data_type: str, symbol: str, timestamp: str, **extra) -> str:
     dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
     parts = extra.get("prefix", f"raw/{data_type}")
-    path = (
-        f"{parts}/symbol={symbol}"
-        f"/year={dt.year:04d}/month={dt.month:02d}/day={dt.day:02d}"
-    )
+    path = f"{parts}/symbol={symbol}/year={dt.year:04d}/month={dt.month:02d}/day={dt.day:02d}"
     if "interval" in extra:
         path += f"/interval={extra['interval']}"
     if "source" in extra:
@@ -52,7 +49,9 @@ def write_parquet(records: list[dict], data_type: str, **extra) -> None:
     for record in records:
         symbol = record.get("symbol", "UNKNOWN")
         timestamp = record.get("timestamp", datetime.utcnow().isoformat())
-        object_path = _partition_path(data_type, symbol, timestamp, event_id=record.get("event_id", ""), **extra)
+        object_path = _partition_path(
+            data_type, symbol, timestamp, event_id=record.get("event_id", ""), **extra
+        )
 
         table = pa.Table.from_pylist([record])
         buf = io.BytesIO()

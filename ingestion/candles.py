@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 INTERVAL_MINUTES = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "1d": 1440}
 
+
 def fetch_latest_candles(
     symbol: str,
     interval: str = "1m",
@@ -45,8 +46,7 @@ def _fetch_symbol_candles(
 ) -> int:
 
     logger.info(
-        "Fetching candles for %s, start=%s, end=%s, interval=%s",
-        symbol, start, end, interval
+        "Fetching candles for %s, start=%s, end=%s, interval=%s", symbol, start, end, interval
     )
 
     ticker = yf.Ticker(symbol)

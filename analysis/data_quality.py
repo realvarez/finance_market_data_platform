@@ -8,11 +8,11 @@ logger = logging.getLogger(__name__)
 
 def check_ohlc_validity(candle: dict) -> list[str]:
     errors = []
-    o, h, l, c = candle["open"], candle["high"], candle["low"], candle["close"]
-    if l > o:
-        errors.append(f"low ({l}) > open ({o})")
-    if l > c:
-        errors.append(f"low ({l}) > close ({c})")
+    o, h, low, c = candle["open"], candle["high"], candle["low"], candle["close"]
+    if low > o:
+        errors.append(f"low ({low}) > open ({o})")
+    if low > c:
+        errors.append(f"low ({low}) > close ({c})")
     if h < o:
         errors.append(f"high ({h}) < open ({o})")
     if h < c:

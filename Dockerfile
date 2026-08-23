@@ -1,14 +1,13 @@
-FROM python:3.12-slim
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 WORKDIR /app
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends build-essential && \
-    rm -rf /var/lib/apt/lists/*
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir \
-    aiokafka jsonschema kafka-python-ng yfinance numpy
+# Install dependencies from uv.lock first for better layer caching.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
 
 COPY ingestion/ ./ingestion/
 COPY entrypoint/ ./entrypoint/
@@ -18,4 +17,4 @@ COPY utils/ ./utils/
 ENV PYTHONPATH=/app
 ENV KAFKA_BOOTSTRAP_SERVERS=broker:29092
 
-CMD ["python", "-m", "entrypoint.tick_service"]
+CMD ["uv", "run", "--no-dev", "python", "-m", "entrypoint.tick_service"]

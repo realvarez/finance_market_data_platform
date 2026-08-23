@@ -11,7 +11,7 @@
 | postgres | postgres_db | — | 5432 | Airflow metadata DB |
 | minio | minio | 9000, 9001 | 9000, 9001 | S3-compatible object storage |
 | clickhouse | clickhouse | 8123, 9009 | 8123, 9000 | Analytical database |
-| spark-master | spark-master | 8081, 7077 | 8080, 7077 | Spark master |
+| spark-master | spark-master | 8082, 7077 | 8080, 7077 | Spark master |
 | spark-worker | spark-worker | — | 8081 | Spark worker |
 | tick-ingestion | tick-ingestion | — | — | Yahoo WebSocket tick service |
 | kafka-init | kafka-init | — | — | One-shot topic bootstrap |
@@ -20,10 +20,10 @@
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| Airflow | http://localhost:8080 | admin1 / admin1 |
+| Airflow | http://localhost:8080 | — (dev mode: all-admins, no login) |
 | Kafka Control Center | http://localhost:9021 | — |
 | MinIO Console | http://localhost:9001 | minioadmin / minioadmin |
-| Spark Master | http://localhost:8081 | — |
+| Spark Master | http://localhost:8082 | — |
 
 ## API Endpoints
 

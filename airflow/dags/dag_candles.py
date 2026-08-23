@@ -1,6 +1,8 @@
 import datetime
+
 import pendulum
-from airflow.sdk import dag, task, Param
+from airflow.sdk import Param, dag, task
+
 from ingestion import config
 from ingestion.candles import fetch_latest_candles
 

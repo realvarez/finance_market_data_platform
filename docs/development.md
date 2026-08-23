@@ -114,6 +114,7 @@ Example test structure:
 # tests/test_schema_validator.py
 from ingestion.schema_validator import validate_tick
 
+
 def test_valid_tick():
     tick = {
         "event_id": "AAPL20260812143000",
@@ -144,9 +145,11 @@ from airflow.sdk import dag, task
 import pendulum
 from analysis.my_job import run_my_job
 
+
 @task()
 def my_task():
     run_my_job()
+
 
 @dag(
     schedule="0 * * * *",
@@ -156,6 +159,7 @@ def my_task():
 )
 def my_dag():
     my_task()
+
 
 my_dag()
 ```
