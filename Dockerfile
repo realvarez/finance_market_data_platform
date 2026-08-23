@@ -12,6 +12,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY ingestion/ ./ingestion/
 COPY entrypoint/ ./entrypoint/
 COPY schemas/ ./schemas/
+COPY storage/ ./storage/
 COPY utils/ ./utils/
 
 ENV PYTHONPATH=/app

@@ -11,6 +11,16 @@ logger = logging.getLogger(__name__)
 
 INTERVAL_MINUTES = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "1d": 1440}
 
+# Yahoo caps how much history a single intraday request may span.
+RANGE_CHUNK_LIMITS = {
+    "1m": timedelta(days=7),
+    "5m": timedelta(days=30),
+    "15m": timedelta(days=30),
+    "30m": timedelta(days=30),
+    "1h": timedelta(days=300),
+    "1d": timedelta(days=3650),
+}
+
 
 def fetch_latest_candles(
     symbol: str,
@@ -31,6 +41,46 @@ def fetch_latest_candles(
         count = _fetch_symbol_candles(producer, sym, interval, start, end)
         total += count
         logger.info("Published %d candles for %s (%s)", count, sym, interval)
+
+    producer.flush()
+    producer.close()
+    return total
+
+
+def fetch_candles_range(
+    symbols: list[str],
+    interval: str = "1m",
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> int:
+    """Fetch historical candles over a date range, chunked to respect Yahoo limits.
+
+    Used by the backfill DAG to seed the data lake for backtesting.
+    """
+    if end is None:
+        end = datetime.now(timezone.utc)
+    if start is None:
+        raise ValueError("start is required for a range fetch")
+
+    chunk_limit = RANGE_CHUNK_LIMITS.get(interval, timedelta(days=7))
+    producer = create_sync_producer()
+    total = 0
+
+    current = start
+    while current < end:
+        window_end = min(current + chunk_limit, end)
+        for sym in symbols:
+            count = _fetch_symbol_candles(producer, sym, interval, current, window_end)
+            total += count
+            logger.info(
+                "Backfilled %d candles for %s (%s) %s..%s",
+                count,
+                sym,
+                interval,
+                current.isoformat(),
+                window_end.isoformat(),
+            )
+        current = window_end
 
     producer.flush()
     producer.close()

@@ -2,6 +2,7 @@ import datetime
 
 import pendulum
 from airflow.sdk import Param, dag, task
+from dag_common import resolve_symbols  # noqa: E402 (sibling module in dags folder)
 
 from ingestion import config
 from ingestion.candles import fetch_latest_candles
@@ -10,14 +11,13 @@ from ingestion.candles import fetch_latest_candles
 @task()
 def fetch_candles(interval: str, **context):
     params = context.get("params", {})
-    symbols_str = params.get("symbols", ",".join(config.DEFAULT_SYMBOLS))
+    symbols = resolve_symbols(params.get("symbols"))
     overlap = int(params.get("overlap_minutes", 5))
-    symbol_list = [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
     return fetch_latest_candles(
-        symbol=symbol_list[0],
+        symbol=symbols[0],
         interval=interval,
         overlap_minutes=overlap,
-        symbols=symbol_list,
+        symbols=symbols,
     )
 
 

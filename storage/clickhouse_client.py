@@ -68,6 +68,25 @@ def insert_features(records: list[dict]) -> None:
     logger.info("Inserted %d features into ClickHouse", len(rows))
 
 
+def insert_signals(records: list[dict]) -> None:
+    if not records:
+        return
+    client = get_client()
+    columns = [
+        "event_id",
+        "symbol",
+        "timestamp",
+        "strategy",
+        "signal",
+        "confidence",
+        "price",
+        "created_at",
+    ]
+    rows = [[r.get(c) for c in columns] for r in records]
+    client.insert("market_signals", rows, column_names=columns)
+    logger.info("Inserted %d signals into ClickHouse", len(rows))
+
+
 def query_candles(symbol: str, interval: str, source: str, limit: int = 100) -> list[dict]:
     client = get_client()
     result = client.query(
@@ -79,6 +98,23 @@ def query_candles(symbol: str, interval: str, source: str, limit: int = 100) -> 
         LIMIT {limit:UInt32}
         """,
         parameters={"symbol": symbol, "interval": interval, "source": source, "limit": limit},
+    )
+    columns = result.column_names
+    return [dict(zip(columns, row)) for row in result.result_rows]
+
+
+def query_features(symbol: str, interval: str, limit: int = 100) -> list[dict]:
+    """Latest feature rows for a symbol, newest first."""
+    client = get_client()
+    result = client.query(
+        """
+        SELECT symbol, timestamp, interval, feature_name, feature_value, computed_at
+        FROM market_features
+        WHERE symbol = {symbol:String} AND interval = {interval:String}
+        ORDER BY timestamp DESC, computed_at DESC
+        LIMIT {limit:UInt32}
+        """,
+        parameters={"symbol": symbol, "interval": interval, "limit": limit},
     )
     columns = result.column_names
     return [dict(zip(columns, row)) for row in result.result_rows]

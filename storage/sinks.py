@@ -39,3 +39,10 @@ def sink_features(records: list[dict]) -> None:
         clickhouse_client.insert_features(records)
     except Exception:
         logger.exception("Failed to sink features to ClickHouse")
+
+
+def sink_signals(records: list[dict]) -> None:
+    try:
+        clickhouse_client.insert_signals(records)
+    except Exception:
+        logger.exception("Failed to sink signals to ClickHouse")

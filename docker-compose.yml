@@ -175,6 +175,38 @@ services:
     networks:
       - market_platform_network
 
+  candle-builder:
+    image: spark:4.0.2-java21-python3
+    container_name: candle-builder
+    # spark-submit is not on PATH in this image; use the absolute path.
+    command: >
+      /opt/spark/bin/spark-submit --master spark://spark-master:7077
+      --deploy-mode client
+      /opt/spark/apps/stream_candle_builder.py
+    depends_on:
+      broker:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_started
+      spark-master:
+        condition: service_started
+      spark-worker:
+        condition: service_started
+    environment:
+      PYTHONPATH: /app
+      KAFKA_BOOTSTRAP_SERVERS: broker:29092
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - .:/app
+      - ./streaming:/opt/spark/apps
+    restart: unless-stopped
+    networks:
+      - market_platform_network
+
   tick-ingestion:
     build:
       context: .
@@ -188,6 +220,29 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: broker:29092
       SYMBOLS: "NVDA,AAPL,SPY"
+    restart: unless-stopped
+    networks:
+      - market_platform_network
+
+  tick-sink:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tick-sink
+    command: uv run --no-dev python -m entrypoint.tick_sink_service
+    depends_on:
+      broker:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_started
+      clickhouse:
+        condition: service_started
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: broker:29092
+      MINIO_ENDPOINT: minio:9000
+      CLICKHOUSE_HOST: clickhouse
     restart: unless-stopped
     networks:
       - market_platform_network

@@ -72,26 +72,26 @@
 ---
 
 ### Phase 7 — Historical Candle Ingestion
-**Status:** In Progress (~70%)
+**Status:** Complete
 
 - [x] Incremental fetch with overlap window
 - [x] Publish to `market.candles.raw`
 - [x] Configurable symbols
 - [x] Airflow DAGs with post-close schedule (1m: every minute + 10s; 5m: every 5 min + 10s)
-- [ ] Airflow Variables for symbol list
+- [x] Airflow Variables for symbol list (`MARKET_SYMBOLS`, resolved via `dag_common.py`)
 
 **Acceptance:** DAGs fetch only latest candles + overlap; no full re-download.
 
 ---
 
 ### Phase 10 — Airflow Orchestration
-**Status:** In Progress (~60%)
+**Status:** Complete
 
 - [x] Thin candle DAGs calling `ingestion/candles.py`
 - [x] Reconciliation DAG
 - [x] Data quality DAG
 - [x] Tick service removed from Airflow (standalone)
-- [ ] Historical backfill DAG
+- [x] Historical backfill DAG (`dag_backfill.py`, chunked range fetch)
 - [x] Feature generation DAG (inside `dag_data_quality.py`)
 
 **Acceptance:** No business logic in DAG files; all logic in importable modules.
@@ -106,7 +106,7 @@
 - [x] MinIO in Docker Compose
 - [x] Parquet writer in `storage/minio_client.py`
 - [x] Partition layout: `symbol/year/month/day`
-- [ ] Continuous tick sink from Kafka to MinIO
+- [x] Continuous tick sink from Kafka to MinIO (`tick-sink` compose service)
 
 **Acceptance:** Raw ticks and candles persisted as Parquet in MinIO.
 
@@ -132,7 +132,7 @@
 - [x] ClickHouse in Docker Compose
 - [x] DDL for market_ticks, market_candles, market_features
 - [x] ClickHouse client in `storage/clickhouse_client.py`
-- [ ] DDL for market_signals, orders, trades, positions (future phases)
+- [x] DDL for market_signals, orders, trades, positions
 
 **Acceptance:** Candles queryable in ClickHouse; example queries documented.
 
@@ -180,13 +180,13 @@
 ## Milestone E — Analytics & Trading (Phases 13–22)
 
 ### Phase 13 — Feature Engineering
-**Status:** In Progress (~40%)
+**Status:** Complete
 
 - [x] Basic price features (returns, log return)
-- [x] Momentum features (EMA 9/21, RSI)
-- [ ] Volatility features (ATR, rolling std)
-- [ ] Volume features (relative volume, VWAP)
-- [ ] Market context (SPY/QQQ returns)
+- [x] Momentum features (EMA 9/21, RSI — Wilder smoothed)
+- [x] Volatility features (ATR, rolling std)
+- [x] Volume features (relative volume, VWAP)
+- [x] Market context (SPY/QQQ returns)
 
 **Acceptance:** Features computed from reconciled candles and stored in ClickHouse.
 
