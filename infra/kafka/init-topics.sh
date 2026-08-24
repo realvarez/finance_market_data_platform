@@ -26,5 +26,12 @@ create_topic "market.candles.reconciled"  3 7776000000   # 90 days
 create_topic "market.signals"             1 2592000000   # 30 days
 create_topic "market.errors"              1 604800000    # 7 days
 
+# Confluent Server internals (telemetry exporter) auto-create their topic with
+# replication factor 3, which is impossible on this single-broker cluster and
+# spams INVALID_REPLICATION_FACTOR every few seconds. The cp-server configure
+# script does not reliably translate the disable flags from env, so pre-create
+# the topic at RF=1 instead: once it exists the exporter stays silent.
+create_topic "_confluent-telemetry-metrics" 1 86400000   # 1 day
+
 echo "Topics created:"
 kafka-topics --list --bootstrap-server "$BOOTSTRAP"

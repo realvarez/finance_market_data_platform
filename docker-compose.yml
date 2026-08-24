@@ -30,6 +30,9 @@ services:
       # and spam INVALID_REPLICATION_FACTOR CreateTopics errors if left on.
       KAFKA_CONFLUENT_CLUSTER_LINK_ENABLE: 'false'
       KAFKA_CONFLUENT_TELEMETRY_ENABLED: 'false'
+      # The kafka telemetry exporter has its own enable flag (master switch
+      # above does not gate it) -> _confluent-telemetry-metrics topic.
+      KAFKA_CONFLUENT_TELEMETRY_EXPORTER_KAFKA_ENABLED: 'false'
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
