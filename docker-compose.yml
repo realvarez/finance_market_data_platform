@@ -87,6 +87,9 @@ services:
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_API_REQUESTS_MAX: "100"
+    mem_limit: 256m
+    cpus: 0.5
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
@@ -108,9 +111,13 @@ services:
     ports:
       - "8123:8123"
       - "9009:9000"
+    mem_limit: 768m
+    mem_reservation: 384m
+    cpus: 1.0
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./infra/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./infra/clickhouse/config.d/memory.xml:/etc/clickhouse-server/config.d/memory.xml
     networks:
       - market_platform_network
     healthcheck:
@@ -130,6 +137,8 @@ services:
       until mc alias set local http://minio:9000 minioadmin minioadmin >/dev/null 2>&1; do sleep 2; done;
       mc mb --ignore-existing local/market-data &&
       echo 'MinIO bucket market-data ready'"
+    mem_limit: 128m
+    restart: "no"
     networks:
       - market_platform_network
 
@@ -241,6 +250,8 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: broker:29092
       SYMBOLS: "BTC-USD,NVDA,MSTR,NU,HIMS,MU"
+    mem_limit: 192m
+    cpus: 0.5
     restart: unless-stopped
     networks:
       - market_platform_network
@@ -264,6 +275,8 @@ services:
 #      KAFKA_BOOTSTRAP_SERVERS: broker:29092
 #      MINIO_ENDPOINT: minio:9000
 #      CLICKHOUSE_HOST: clickhouse
+#    mem_limit: 192m
+#    cpus: 0.5
 #    restart: unless-stopped
 #    networks:
 #      - market_platform_network
@@ -271,10 +284,14 @@ services:
   postgres:
     container_name: postgres_db
     image: postgres:16.0
+    command: postgres -c shared_buffers=64MB -c max_connections=30
     environment:
       - POSTGRES_USER=airflow
       - POSTGRES_PASSWORD=airflow
       - POSTGRES_DB=airflow
+    mem_limit: 192m
+    mem_reservation: 96m
+    cpus: 0.5
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -303,9 +320,17 @@ services:
       AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
       AIRFLOW__WEBSERVER__SECRET_KEY: 'developer-secret-key'
       AIRFLOW__API__SECRET_KEY: 'developer-secret-key'
+      AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: "60"
+      AIRFLOW__SCHEDULER__PARSING_PROCESSES: "1"
+      AIRFLOW__CORE__PARALLELISM: "4"
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "2"
+      AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: "1"
       # SimpleAuthManager with all-admins: no login required in local dev.
       KAFKA_BOOTSTRAP_SERVERS: broker:29092
       PYTHONPATH: /opt/airflow
+    mem_limit: 1024m
+    mem_reservation: 512m
+    cpus: 1.5
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./ingestion:/opt/airflow/ingestion
