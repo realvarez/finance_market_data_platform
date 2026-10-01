@@ -48,7 +48,7 @@ TICK_SCHEMA = StructType(
 
 INTERVALS = {"1m": "1 minute", "5m": "5 minutes"}
 WATERMARK_DELAY = os.getenv("SPARK_WATERMARK_DELAY", "10 seconds")
-CHECKPOINT_BUCKET = os.getenv("MINIO_CHECKPOINT_BUCKET", config.MINIO_BUCKET)
+CHECKPOINT_BUCKET = config.MINIO_CHECKPOINT_BUCKET
 
 
 def build_candles(spark, interval: str, window_duration: str):

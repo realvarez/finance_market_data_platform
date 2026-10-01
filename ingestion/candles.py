@@ -37,13 +37,14 @@ def fetch_latest_candles(
     start = now - timedelta(minutes=overlap_minutes + INTERVAL_MINUTES.get(interval, 1))
     end = now
 
-    for sym in target_symbols:
-        count = _fetch_symbol_candles(producer, sym, interval, start, end)
-        total += count
-        logger.info("Published %d candles for %s (%s)", count, sym, interval)
-
-    producer.flush()
-    producer.close()
+    try:
+        for sym in target_symbols:
+            count = _fetch_symbol_candles(producer, sym, interval, start, end)
+            total += count
+            logger.info("Published %d candles for %s (%s)", count, sym, interval)
+        producer.flush()
+    finally:
+        producer.close()
     return total
 
 
@@ -67,23 +68,24 @@ def fetch_candles_range(
     total = 0
 
     current = start
-    while current < end:
-        window_end = min(current + chunk_limit, end)
-        for sym in symbols:
-            count = _fetch_symbol_candles(producer, sym, interval, current, window_end)
-            total += count
-            logger.info(
-                "Backfilled %d candles for %s (%s) %s..%s",
-                count,
-                sym,
-                interval,
-                current.isoformat(),
-                window_end.isoformat(),
-            )
-        current = window_end
-
-    producer.flush()
-    producer.close()
+    try:
+        while current < end:
+            window_end = min(current + chunk_limit, end)
+            for sym in symbols:
+                count = _fetch_symbol_candles(producer, sym, interval, current, window_end)
+                total += count
+                logger.info(
+                    "Backfilled %d candles for %s (%s) %s..%s",
+                    count,
+                    sym,
+                    interval,
+                    current.isoformat(),
+                    window_end.isoformat(),
+                )
+            current = window_end
+        producer.flush()
+    finally:
+        producer.close()
     return total
 
 

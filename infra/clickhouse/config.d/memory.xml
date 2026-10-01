@@ -1,0 +1,6 @@
+<clickhouse>
+    <!-- Cap server-wide memory allocation to 512MB for local development -->
+    <max_server_memory_usage>536870912</max_server_memory_usage>
+    <!-- Cap mark cache size to 64MB -->
+    <mark_cache_size>67108864</mark_cache_size>
+</clickhouse>

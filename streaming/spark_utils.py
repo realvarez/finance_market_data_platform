@@ -1,14 +1,19 @@
 import logging
-import os
 
 from pyspark.sql import SparkSession
 
+from ingestion import config
+
 logger = logging.getLogger(__name__)
 
-KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "broker:29092")
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "http://minio:9000")
-MINIO_ACCESS_KEY = os.getenv("MINIO_ROOT_USER", "minioadmin")
-MINIO_SECRET_KEY = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
+KAFKA_BOOTSTRAP = config.KAFKA_BOOTSTRAP_SERVERS
+MINIO_ENDPOINT = (
+    config.MINIO_ENDPOINT
+    if config.MINIO_ENDPOINT.startswith(("http://", "https://"))
+    else f"http://{config.MINIO_ENDPOINT}"
+)
+MINIO_ACCESS_KEY = config.MINIO_ACCESS_KEY
+MINIO_SECRET_KEY = config.MINIO_SECRET_KEY
 
 
 def create_spark_connection(name: str) -> SparkSession | None:

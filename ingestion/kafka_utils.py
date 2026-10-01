@@ -35,12 +35,16 @@ async def send_async(producer: AIOKafkaProducer, topic: str, key: str, data: dic
         await send_error_async(producer, data, str(topic))
 
 
-async def send_error_async(producer: AIOKafkaProducer, original: dict, reason: str) -> None:
-    error_msg = {
+def _build_error_payload(original: dict, reason: str) -> dict:
+    return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "reason": reason,
         "original": original,
     }
+
+
+async def send_error_async(producer: AIOKafkaProducer, original: dict, reason: str) -> None:
+    error_msg = _build_error_payload(original, reason)
     try:
         await producer.send(
             topic=config.TOPIC_ERRORS,
@@ -63,11 +67,7 @@ def send_sync(producer: KafkaProducer, topic: str, key: str, data: dict) -> None
 
 
 def send_error_sync(producer: KafkaProducer, original: dict, reason: str) -> None:
-    error_msg = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "reason": reason,
-        "original": original,
-    }
+    error_msg = _build_error_payload(original, reason)
     try:
         producer.send(
             topic=config.TOPIC_ERRORS,

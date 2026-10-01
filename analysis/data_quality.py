@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timezone
 
+from ingestion import config
 from storage.clickhouse_client import query_candles
 
 logger = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ def check_freshness(candles: list[dict], max_age_minutes: int = 10) -> dict:
     if not candles:
         return {"check": "freshness", "passed": False, "reason": "no candles"}
     latest = max(candles, key=lambda c: c["timestamp"])
-    latest_ts = datetime.fromisoformat(str(latest["timestamp"]).replace("Z", "+00:00"))
+    latest_ts = datetime.fromisoformat(str(latest["timestamp"]))
     age_minutes = (datetime.now(timezone.utc) - latest_ts).total_seconds() / 60
     return {
         "check": "freshness",
@@ -57,29 +58,27 @@ def check_freshness(candles: list[dict], max_age_minutes: int = 10) -> dict:
 
 
 def check_ohlc_batch(candles: list[dict]) -> dict:
-    invalid = []
-    for candle in candles:
-        errors = check_ohlc_validity(candle)
-        if errors:
-            invalid.append({"event_id": candle.get("event_id"), "errors": errors})
+    invalid = [
+        {"event_id": c.get("event_id"), "errors": errors}
+        for c in candles
+        if (errors := check_ohlc_validity(c))
+    ]
     return {
         "check": "ohlc_validity",
         "invalid_count": len(invalid),
-        "passed": len(invalid) == 0,
+        "passed": not invalid,
         "details": invalid[:10],
     }
 
 
 def run_checks(symbols: list[str] | None = None, interval: str = "1m") -> dict:
-    from ingestion import config
-
     symbols = symbols or config.DEFAULT_SYMBOLS
     all_results = {"timestamp": datetime.now(timezone.utc).isoformat(), "symbols": {}}
 
     for symbol in symbols:
-        candles = query_candles(symbol, interval, "reconciled", limit=100)
-        if not candles:
-            candles = query_candles(symbol, interval, "yahoo_finance", limit=100)
+        candles = query_candles(
+            symbol, interval, config.SOURCE_RECONCILED, limit=100
+        ) or query_candles(symbol, interval, config.SOURCE_YAHOO, limit=100)
 
         symbol_results = {
             "completeness": check_completeness(candles, expected_count=1),
