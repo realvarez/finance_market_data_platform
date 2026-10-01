@@ -3,6 +3,8 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
+import pytest
+
 from ingestion import candles as candles_mod
 
 
@@ -31,12 +33,8 @@ def test_fetch_candles_range_chunks(monkeypatch):
 
 
 def test_fetch_candles_range_requires_start():
-    try:
+    with pytest.raises(ValueError, match="start is required"):
         candles_mod.fetch_candles_range(["NVDA"], interval="1m", start=None)
-        raised = False
-    except ValueError:
-        raised = True
-    assert raised
 
 
 def test_multiple_symbols_per_chunk(monkeypatch):

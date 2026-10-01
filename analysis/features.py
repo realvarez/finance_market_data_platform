@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 
 import numpy as np
 
-from storage.clickhouse_client import query_candles
+from ingestion import config
+from storage.clickhouse_client import query_candles, query_features
 from storage.sinks import sink_features
 
 logger = logging.getLogger(__name__)
@@ -158,10 +159,8 @@ def compute_features(
     add("rsi_14", _compute_rsi(closes, 14))
     add("atr_14", _compute_atr(candles, 14))
 
-    if len(closes) >= 2:
-        returns = np.diff(closes) / np.array(closes[:-1])
-        std = np.std(returns[-10:]) if len(returns) >= 10 else np.std(returns)
-        add("rolling_std_10", float(std))
+    returns = np.diff(closes) / np.array(closes[:-1])
+    add("rolling_std_10", float(np.std(returns[-10:])))
 
     add("relative_volume", _compute_relative_volume(volumes))
     add("vwap", _compute_vwap(candles))
@@ -177,8 +176,6 @@ def compute_features(
 
 def latest_feature_vector(symbol: str, interval: str = "1m") -> dict[str, float]:
     """Pivot the most recent feature rows for a symbol into {name: value}."""
-    from storage.clickhouse_client import query_features
-
     rows = query_features(symbol, interval)
     if not rows:
         return {}
@@ -189,8 +186,6 @@ def latest_feature_vector(symbol: str, interval: str = "1m") -> dict[str, float]
 
 
 def generate_features(symbols: list[str] | None = None, interval: str = "1m") -> int:
-    from ingestion import config
-
     symbols = symbols or config.DEFAULT_SYMBOLS
     market_context = compute_market_context(interval)
     total = 0

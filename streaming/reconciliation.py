@@ -23,11 +23,10 @@ def _consume_topic(topic: str, timeout_ms: int = 10000) -> list[dict]:
         consumer_timeout_ms=timeout_ms,
         value_deserializer=lambda m: json.loads(m.decode("utf-8")),
     )
-    messages = []
-    for msg in consumer:
-        messages.append(msg.value)
-    consumer.close()
-    return messages
+    try:
+        return [msg.value for msg in consumer]
+    finally:
+        consumer.close()
 
 
 def _candle_key(candle: dict) -> str:
@@ -41,44 +40,26 @@ def _within_tolerance(a: float, b: float, tolerance: float) -> bool:
 
 
 def reconcile_candle(raw: dict | None, calculated: dict | None) -> dict:
-    now = datetime.now(timezone.utc).isoformat()
+    if not raw and not calculated:
+        raise ValueError("Both raw and calculated candles are None")
 
     if raw and calculated:
         ohlcv_match = all(
-            [
-                _within_tolerance(raw["open"], calculated["open"], PRICE_TOLERANCE),
-                _within_tolerance(raw["high"], calculated["high"], PRICE_TOLERANCE),
-                _within_tolerance(raw["low"], calculated["low"], PRICE_TOLERANCE),
-                _within_tolerance(raw["close"], calculated["close"], PRICE_TOLERANCE),
-                _within_tolerance(raw["volume"], calculated["volume"], VOLUME_TOLERANCE),
-            ]
-        )
-        base = raw if ohlcv_match else raw
-        status = "matched" if ohlcv_match else "corrected"
-        return {
-            **base,
-            "source": config.SOURCE_RECONCILED,
-            "created_at": now,
-            "reconciliation_status": status,
-        }
+            _within_tolerance(raw[k], calculated[k], PRICE_TOLERANCE)
+            for k in ("open", "high", "low", "close")
+        ) and _within_tolerance(raw["volume"], calculated["volume"], VOLUME_TOLERANCE)
+        base, status = raw, ("matched" if ohlcv_match else "corrected")
+    elif raw:
+        base, status = raw, "raw_only"
+    else:
+        base, status = calculated, "calculated_only"
 
-    if raw:
-        return {
-            **raw,
-            "source": config.SOURCE_RECONCILED,
-            "created_at": now,
-            "reconciliation_status": "raw_only",
-        }
-
-    if calculated:
-        return {
-            **calculated,
-            "source": config.SOURCE_RECONCILED,
-            "created_at": now,
-            "reconciliation_status": "calculated_only",
-        }
-
-    raise ValueError("Both raw and calculated candles are None")
+    return {
+        **base,
+        "source": config.SOURCE_RECONCILED,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "reconciliation_status": status,
+    }
 
 
 def reconcile_candles(symbols: list[str] | None = None) -> dict:
@@ -99,24 +80,26 @@ def reconcile_candles(symbols: list[str] | None = None) -> dict:
     reconciled = []
     metrics = {"matched": 0, "corrected": 0, "raw_only": 0, "calculated_only": 0, "missing": 0}
 
-    for key in all_keys:
-        raw = raw_index.get(key)
-        calc = calc_index.get(key)
+    try:
+        for key in all_keys:
+            raw = raw_index.get(key)
+            calc = calc_index.get(key)
 
-        try:
-            result = reconcile_candle(raw, calc)
-            validated = validate_candle(result)
-            send_sync(producer, config.TOPIC_CANDLES_RECONCILED, validated["symbol"], validated)
-            reconciled.append(validated)
-            status = validated.get("reconciliation_status", "unknown")
-            if status in metrics:
-                metrics[status] += 1
-        except Exception:
-            logger.exception("Failed to reconcile candle %s", key)
-            metrics["missing"] += 1
+            try:
+                result = reconcile_candle(raw, calc)
+                validated = validate_candle(result)
+                send_sync(producer, config.TOPIC_CANDLES_RECONCILED, validated["symbol"], validated)
+                reconciled.append(validated)
+                status = validated.get("reconciliation_status", "unknown")
+                if status in metrics:
+                    metrics[status] += 1
+            except Exception:
+                logger.exception("Failed to reconcile candle %s", key)
+                metrics["missing"] += 1
 
-    producer.flush()
-    producer.close()
+        producer.flush()
+    finally:
+        producer.close()
 
     if reconciled:
         sink_candles(reconciled, source="reconciled")

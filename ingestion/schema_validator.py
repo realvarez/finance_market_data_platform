@@ -7,7 +7,7 @@ from ingestion.config import SCHEMAS_DIR
 
 def _load_schema(name: str) -> dict:
     path = SCHEMAS_DIR / name
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 

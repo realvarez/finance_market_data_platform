@@ -17,3 +17,8 @@ wheels/
 
 # Local agent tooling state
 .zcode/
+
+# Environment files
+.env
+.env.*
+!.env.example

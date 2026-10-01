@@ -1,7 +1,7 @@
 services:
 
   broker:
-    image: confluentinc/cp-server:7.6.0
+    image: confluentinc/cp-kafka:7.6.0
     hostname: broker
     container_name: broker
     ports:
@@ -22,22 +22,14 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_JMX_PORT: 9101
       KAFKA_JMX_HOSTNAME: localhost
-      KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schema-registry:8081
-      KAFKA_CONFLUENT_BALANCER_ENABLE: "false"
-      CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
-      CONFLUENT_METRICS_ENABLED: 'false'
-      # Single-broker dev cluster: these enterprise internals default to RF=3
-      # and spam INVALID_REPLICATION_FACTOR CreateTopics errors if left on.
-      KAFKA_CONFLUENT_CLUSTER_LINK_ENABLE: 'false'
-      KAFKA_CONFLUENT_TELEMETRY_ENABLED: 'false'
-      # The kafka telemetry exporter has its own enable flag (master switch
-      # above does not gate it) -> _confluent-telemetry-metrics topic.
-      KAFKA_CONFLUENT_TELEMETRY_EXPORTER_KAFKA_ENABLED: 'false'
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_DEFAULT_REPLICATION_FACTOR: 1
-
+    mem_limit: 768m
+    mem_reservation: 384m
+    cpus: 1.0
     volumes:
       - kafka_data:/var/lib/kafka/data
     networks:
@@ -49,7 +41,7 @@ services:
       retries: 5
 
   kafka-init:
-    image: confluentinc/cp-server:7.6.0
+    image: confluentinc/cp-kafka:7.6.0
     container_name: kafka-init
     depends_on:
       broker:
@@ -59,50 +51,30 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: broker:29092
     entrypoint: [ "bash", "/init-topics.sh" ]
+    mem_limit: 128m
+    restart: "no"
     networks:
       - market_platform_network
 
-  schema-registry:
-    image: confluentinc/cp-schema-registry:8.2.2
-    hostname: schema-registry
-    container_name: schema-registry
+  akhq:
+    image: tchiotludo/akhq:latest
+    container_name: akhq
+    profiles:
+      - ui
     depends_on:
       broker:
         condition: service_healthy
     ports:
-      - "8081:8081"
+      - "9021:8080"
     environment:
-      SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'PLAINTEXT://broker:29092'
-      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
-    networks:
-      - market_platform_network
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8081/" ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-
-  control-center:
-    image: confluentinc/cp-enterprise-control-center:7.6.12
-    hostname: control-center
-    container_name: control-center
-    depends_on:
-      broker:
-        condition: service_healthy
-      schema-registry:
-        condition: service_healthy
-    ports:
-      - "9021:9021"
-    environment:
-      CONTROL_CENTER_BOOTSTRAP_SERVERS: 'broker:29092'
-      CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
-      CONTROL_CENTER_REPLICATION_FACTOR: 1
-      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
-      CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
-      CONFLUENT_METRICS_ENABLE: 'false'
-      PORT: 9021
+      AKHQ_CONFIGURATION: |
+        akhq:
+          connections:
+            market-platform:
+              properties:
+                bootstrap.servers: "broker:29092"
+    mem_limit: 128m
+    cpus: 0.5
     networks:
       - market_platform_network
 
@@ -113,8 +85,11 @@ services:
       - "9000:9000"
       - "9001:9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_API_REQUESTS_MAX: "100"
+    mem_limit: 256m
+    cpus: 0.5
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
@@ -130,15 +105,19 @@ services:
     image: clickhouse/clickhouse-server:latest
     container_name: clickhouse
     environment:
-      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
-      CLICKHOUSE_PASSWORD: clickhouse 
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
     ports:
       - "8123:8123"
       - "9009:9000"
+    mem_limit: 768m
+    mem_reservation: 384m
+    cpus: 1.0
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./infra/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./infra/clickhouse/config.d/memory.xml:/etc/clickhouse-server/config.d/memory.xml
     networks:
       - market_platform_network
     healthcheck:
@@ -155,23 +134,29 @@ services:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      until mc alias set local http://minio:9000 minioadmin minioadmin >/dev/null 2>&1; do sleep 2; done;
+      until mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin} >/dev/null 2>&1; do sleep 2; done;
       mc mb --ignore-existing local/market-data &&
       echo 'MinIO bucket market-data ready'"
+    mem_limit: 128m
+    restart: "no"
     networks:
       - market_platform_network
 
   spark-master:
     image: spark:4.0.2-java21-python3
     container_name: spark-master
+    profiles:
+      - spark-cluster
     command: >
       /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master --host spark-master --webui-port 8080
     environment:
       PYTHONPATH: /app
       KAFKA_BOOTSTRAP_SERVERS: broker:29092
       MINIO_ENDPOINT: http://minio:9000
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    mem_limit: 384m
+    cpus: 0.5
     healthcheck:
       test: ["CMD-SHELL", "python3 -c 'import socket; socket.create_connection((\"localhost\", 8080), 2)'"]
       interval: 15s
@@ -190,6 +175,8 @@ services:
   spark-worker:
     image: spark:4.0.2-java21-python3
     container_name: spark-worker
+    profiles:
+      - spark-cluster
     command: >
       /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker -c 2 -m 1g spark://spark-master:7077
     depends_on:
@@ -199,8 +186,10 @@ services:
       PYTHONPATH: /app
       KAFKA_BOOTSTRAP_SERVERS: broker:29092
       MINIO_ENDPOINT: http://minio:9000
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    mem_limit: 768m
+    cpus: 1.0
     volumes:
       - .:/app
       - ./streaming:/opt/spark/apps
@@ -214,8 +203,10 @@ services:
     # SparkSession.builder is ignored when submitting a job (connector versions
     # matched to the 4.0.2 runtime / Hadoop 3.4.1).
     command: >
-      /opt/spark/bin/spark-submit --master spark://spark-master:7077
-      --deploy-mode client
+      /opt/spark/bin/spark-submit
+      --master local[2]
+      --driver-memory 768m
+      --conf spark.sql.shuffle.partitions=2
       --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.2,org.apache.hadoop:hadoop-aws:3.4.1,com.amazonaws:aws-java-sdk-bundle:1.12.780
       /opt/spark/apps/stream_candle_builder.py
     depends_on:
@@ -227,16 +218,14 @@ services:
         condition: service_started
       minio-init:
         condition: service_completed_successfully
-      spark-master:
-        condition: service_healthy
-      spark-worker:
-        condition: service_started
     environment:
       PYTHONPATH: /app
       KAFKA_BOOTSTRAP_SERVERS: broker:29092
       MINIO_ENDPOINT: http://minio:9000
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    mem_limit: 1024m
+    cpus: 1.5
     # Run as root so Ivy can write its package cache to /root/.ivy2 (the image's
     # default uid 185 has HOME=/nonexistent and cannot persist --packages downloads).
     user: root
@@ -260,7 +249,9 @@ services:
         condition: service_completed_successfully
     environment:
       KAFKA_BOOTSTRAP_SERVERS: broker:29092
-      SYMBOLS: "BTC-USD,NVDA,MSTR,NU,HIMS,MU"
+      SYMBOLS: "${SYMBOLS:-BTC-USD,NVDA,MSTR,NU,HIMS,MU}"
+    mem_limit: 192m
+    cpus: 0.5
     restart: unless-stopped
     networks:
       - market_platform_network
@@ -284,6 +275,8 @@ services:
 #      KAFKA_BOOTSTRAP_SERVERS: broker:29092
 #      MINIO_ENDPOINT: minio:9000
 #      CLICKHOUSE_HOST: clickhouse
+#    mem_limit: 192m
+#    cpus: 0.5
 #    restart: unless-stopped
 #    networks:
 #      - market_platform_network
@@ -291,10 +284,14 @@ services:
   postgres:
     container_name: postgres_db
     image: postgres:16.0
+    command: postgres -c shared_buffers=64MB -c max_connections=30
     environment:
-      - POSTGRES_USER=airflow
-      - POSTGRES_PASSWORD=airflow
-      - POSTGRES_DB=airflow
+      - POSTGRES_USER=${POSTGRES_USER:-airflow}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-airflow}
+      - POSTGRES_DB=${POSTGRES_DB:-airflow}
+    mem_limit: 192m
+    mem_reservation: 96m
+    cpus: 0.5
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -316,16 +313,31 @@ services:
     environment:
       AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: 'true' 
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres:5432/${POSTGRES_DB:-airflow}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'false'
       AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
-      AIRFLOW__WEBSERVER__SECRET_KEY: 'developer-secret-key'
-      AIRFLOW__API__SECRET_KEY: 'developer-secret-key'
+      AIRFLOW__WEBSERVER__SECRET_KEY: '${AIRFLOW_SECRET_KEY:-developer-secret-key}'
+      AIRFLOW__API__SECRET_KEY: '${AIRFLOW_SECRET_KEY:-developer-secret-key}'
+      AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: "60"
+      AIRFLOW__SCHEDULER__PARSING_PROCESSES: "1"
+      AIRFLOW__CORE__PARALLELISM: "4"
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "2"
+      AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: "1"
       # SimpleAuthManager with all-admins: no login required in local dev.
       KAFKA_BOOTSTRAP_SERVERS: broker:29092
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE:-market_platform}
       PYTHONPATH: /opt/airflow
+    mem_limit: 1024m
+    mem_reservation: 512m
+    cpus: 1.5
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./ingestion:/opt/airflow/ingestion

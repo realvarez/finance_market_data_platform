@@ -1,5 +1,6 @@
 import pendulum
 from airflow.sdk import Param, dag, task
+from dag_common import resolve_symbols  # noqa: E402 (sibling module in dags folder)
 
 from analysis.data_quality import run_checks
 from analysis.features import generate_features
@@ -8,18 +9,14 @@ from ingestion import config
 
 @task()
 def data_quality_task(**context):
-    params = context.get("params", {})
-    symbols_str = params.get("symbols", ",".join(config.DEFAULT_SYMBOLS))
-    symbol_list = [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
-    return run_checks(symbols=symbol_list)
+    symbols = resolve_symbols(context.get("params", {}).get("symbols"))
+    return run_checks(symbols=symbols)
 
 
 @task()
 def feature_generation_task(**context):
-    params = context.get("params", {})
-    symbols_str = params.get("symbols", ",".join(config.DEFAULT_SYMBOLS))
-    symbol_list = [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
-    return generate_features(symbols=symbol_list)
+    symbols = resolve_symbols(context.get("params", {}).get("symbols"))
+    return generate_features(symbols=symbols)
 
 
 @dag(

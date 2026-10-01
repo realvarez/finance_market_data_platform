@@ -12,79 +12,82 @@ def get_client():
         host=config.CLICKHOUSE_HOST,
         port=config.CLICKHOUSE_PORT,
         database=config.CLICKHOUSE_DATABASE,
+        username=config.CLICKHOUSE_USER,
+        password=config.CLICKHOUSE_PASSWORD,
     )
 
 
-def insert_ticks(records: list[dict]) -> None:
+TICK_COLUMNS = [
+    "event_id",
+    "symbol",
+    "timestamp",
+    "ingestion_timestamp",
+    "price",
+    "volume",
+    "bid",
+    "ask",
+    "source",
+]
+
+CANDLE_COLUMNS = [
+    "event_id",
+    "symbol",
+    "interval",
+    "timestamp",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "source",
+    "created_at",
+    "reconciliation_status",
+]
+
+FEATURE_COLUMNS = [
+    "symbol",
+    "timestamp",
+    "interval",
+    "feature_name",
+    "feature_value",
+    "computed_at",
+]
+
+SIGNAL_COLUMNS = [
+    "event_id",
+    "symbol",
+    "timestamp",
+    "strategy",
+    "signal",
+    "confidence",
+    "price",
+    "created_at",
+]
+
+
+def _insert_records(table: str, records: list[dict], columns: list[str]) -> None:
     if not records:
         return
     client = get_client()
-    columns = [
-        "event_id",
-        "symbol",
-        "timestamp",
-        "ingestion_timestamp",
-        "price",
-        "volume",
-        "bid",
-        "ask",
-        "source",
-    ]
     rows = [[r.get(c) for c in columns] for r in records]
-    client.insert("market_ticks", rows, column_names=columns)
-    logger.info("Inserted %d ticks into ClickHouse", len(rows))
+    client.insert(table, rows, column_names=columns)
+    logger.info("Inserted %d rows into %s", len(rows), table)
+
+
+def insert_ticks(records: list[dict]) -> None:
+    _insert_records("market_ticks", records, TICK_COLUMNS)
 
 
 def insert_candles(records: list[dict]) -> None:
-    if not records:
-        return
-    client = get_client()
-    columns = [
-        "event_id",
-        "symbol",
-        "interval",
-        "timestamp",
-        "open",
-        "high",
-        "low",
-        "close",
-        "volume",
-        "source",
-        "created_at",
-        "reconciliation_status",
-    ]
-    rows = [[r.get(c) for c in columns] for r in records]
-    client.insert("market_candles", rows, column_names=columns)
-    logger.info("Inserted %d candles into ClickHouse", len(rows))
+    _insert_records("market_candles", records, CANDLE_COLUMNS)
 
 
 def insert_features(records: list[dict]) -> None:
-    if not records:
-        return
-    client = get_client()
-    columns = ["symbol", "timestamp", "interval", "feature_name", "feature_value", "computed_at"]
-    rows = [[r.get(c) for c in columns] for r in records]
-    client.insert("market_features", rows, column_names=columns)
-    logger.info("Inserted %d features into ClickHouse", len(rows))
+    _insert_records("market_features", records, FEATURE_COLUMNS)
 
 
 def insert_signals(records: list[dict]) -> None:
-    if not records:
-        return
-    client = get_client()
-    columns = [
-        "event_id",
-        "symbol",
-        "timestamp",
-        "strategy",
-        "signal",
-        "confidence",
-        "price",
-        "created_at",
-    ]
-    rows = [[r.get(c) for c in columns] for r in records]
-    client.insert("market_signals", rows, column_names=columns)
-    logger.info("Inserted %d signals into ClickHouse", len(rows))
+    _insert_records("market_signals", records, SIGNAL_COLUMNS)
 
 
 def query_candles(symbol: str, interval: str, source: str, limit: int = 100) -> list[dict]:

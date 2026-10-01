@@ -1,5 +1,6 @@
 import pendulum
 from airflow.sdk import Param, dag, task
+from dag_common import resolve_symbols  # noqa: E402
 
 from ingestion import config
 from streaming.reconciliation import reconcile_candles
@@ -7,10 +8,8 @@ from streaming.reconciliation import reconcile_candles
 
 @task()
 def run_reconciliation(**context):
-    params = context.get("params", {})
-    symbols_str = params.get("symbols", ",".join(config.DEFAULT_SYMBOLS))
-    symbol_list = [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
-    return reconcile_candles(symbols=symbol_list)
+    symbols = resolve_symbols(context.get("params", {}).get("symbols"))
+    return reconcile_candles(symbols=symbols)
 
 
 @dag(

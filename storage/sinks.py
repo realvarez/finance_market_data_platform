@@ -6,6 +6,8 @@ logger = logging.getLogger(__name__)
 
 
 def sink_ticks(records: list[dict]) -> None:
+    if not records:
+        return
     try:
         minio_client.write_parquet(records, "ticks")
     except Exception:
@@ -17,15 +19,18 @@ def sink_ticks(records: list[dict]) -> None:
 
 
 def sink_candles(records: list[dict], source: str = "raw") -> None:
-    prefix = "raw/candles" if source != "reconciled" else "reconciled/candles"
+    if not records:
+        return
+    prefix = "reconciled/candles" if source == "reconciled" else "raw/candles"
     for record in records:
-        extra = {
-            "prefix": prefix,
-            "interval": record.get("interval", "1m"),
-            "source": record.get("source", source),
-        }
         try:
-            minio_client.write_parquet([record], "candles", **extra)
+            minio_client.write_parquet(
+                [record],
+                "candles",
+                prefix=prefix,
+                interval=record.get("interval", "1m"),
+                source=record.get("source", source),
+            )
         except Exception:
             logger.exception("Failed to sink candle to MinIO")
     try:
@@ -35,6 +40,8 @@ def sink_candles(records: list[dict], source: str = "raw") -> None:
 
 
 def sink_features(records: list[dict]) -> None:
+    if not records:
+        return
     try:
         clickhouse_client.insert_features(records)
     except Exception:
@@ -42,6 +49,8 @@ def sink_features(records: list[dict]) -> None:
 
 
 def sink_signals(records: list[dict]) -> None:
+    if not records:
+        return
     try:
         clickhouse_client.insert_signals(records)
     except Exception:

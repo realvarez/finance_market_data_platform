@@ -1,6 +1,6 @@
 import io
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -9,6 +9,8 @@ from minio import Minio
 from ingestion import config
 
 logger = logging.getLogger(__name__)
+
+_bucket_verified = False
 
 
 def get_client() -> Minio:
@@ -21,14 +23,18 @@ def get_client() -> Minio:
 
 
 def ensure_bucket(client: Minio | None = None) -> None:
+    global _bucket_verified
+    if _bucket_verified:
+        return
     client = client or get_client()
     if not client.bucket_exists(config.MINIO_BUCKET):
         client.make_bucket(config.MINIO_BUCKET)
         logger.info("Created bucket %s", config.MINIO_BUCKET)
+    _bucket_verified = True
 
 
 def _partition_path(data_type: str, symbol: str, timestamp: str, **extra) -> str:
-    dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    dt = datetime.fromisoformat(timestamp)
     parts = extra.get("prefix", f"raw/{data_type}")
     path = f"{parts}/symbol={symbol}/year={dt.year:04d}/month={dt.month:02d}/day={dt.day:02d}"
     if "interval" in extra:
@@ -48,7 +54,7 @@ def write_parquet(records: list[dict], data_type: str, **extra) -> None:
 
     for record in records:
         symbol = record.get("symbol", "UNKNOWN")
-        timestamp = record.get("timestamp", datetime.utcnow().isoformat())
+        timestamp = record.get("timestamp", datetime.now(timezone.utc).isoformat())
         object_path = _partition_path(
             data_type, symbol, timestamp, event_id=record.get("event_id", ""), **extra
         )
