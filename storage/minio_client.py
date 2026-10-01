@@ -14,8 +14,12 @@ _bucket_verified = False
 
 
 def get_client() -> Minio:
+    endpoint = config.MINIO_ENDPOINT
+    for prefix in ("http://", "https://"):
+        if endpoint.startswith(prefix):
+            endpoint = endpoint[len(prefix) :]
     return Minio(
-        config.MINIO_ENDPOINT,
+        endpoint,
         access_key=config.MINIO_ACCESS_KEY,
         secret_key=config.MINIO_SECRET_KEY,
         secure=config.MINIO_SECURE,

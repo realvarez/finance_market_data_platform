@@ -24,6 +24,16 @@ def test_compose_storage_and_airflow_bounds():
     tick = services["tick-ingestion"]
     assert tick["mem_limit"] == "192m"
 
+    # Tick Sink
+    sink = services["tick-sink"]
+    assert sink["mem_limit"] == "192m"
+    assert sink["cpus"] == 0.5
+    assert sink["depends_on"]["broker"]["condition"] == "service_healthy"
+    assert sink["depends_on"]["minio"]["condition"] == "service_healthy"
+    assert sink["depends_on"]["minio-init"]["condition"] == "service_completed_successfully"
+    assert sink["depends_on"]["clickhouse"]["condition"] == "service_healthy"
+    assert sink["environment"]["MINIO_ENDPOINT"] == "minio:9000"
+
     # Postgres
     pg = services["postgres"]
     assert pg["mem_limit"] == "192m"

@@ -249,30 +249,37 @@ services:
     networks:
       - market_platform_network
 
-  #  tick-sink:
-  #    build:
-  #      context: .
-  #      dockerfile: Dockerfile
-  #    container_name: tick-sink
-  #    command: uv run --no-dev python -m entrypoint.tick_sink_service
-  #    depends_on:
-  #      broker:
-  #        condition: service_healthy
-  #      kafka-init:
-  #        condition: service_completed_successfully
-  #      minio:
-  #        condition: service_started
-  #      clickhouse:
-  #        condition: service_started
-  #    environment:
-  #      KAFKA_BOOTSTRAP_SERVERS: broker:29092
-  #      MINIO_ENDPOINT: minio:9000
-  #      CLICKHOUSE_HOST: clickhouse
-  #    mem_limit: 192m
-  #    cpus: 0.5
-  #    restart: unless-stopped
-  #    networks:
-  #      - market_platform_network
+  tick-sink:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tick-sink
+    command: uv run --no-dev python -m entrypoint.tick_sink_service
+    depends_on:
+      broker:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      clickhouse:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: broker:29092
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE:-market_platform}
+    mem_limit: 192m
+    cpus: 0.5
+    restart: unless-stopped
+    networks:
+      - market_platform_network
 
   postgres:
     container_name: postgres_db

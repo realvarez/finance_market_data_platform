@@ -41,3 +41,24 @@ class TestConsumerRetry:
         assert len(attempts) == 5
         # 20 -> 40 capped to 30, then stays at 30.
         assert sleeps == [20.0, 30.0, 30.0, 30.0]
+
+
+def test_minio_client_strips_url_scheme(monkeypatch):
+    import storage.minio_client as minio_client
+    from ingestion import config
+
+    created_endpoint = None
+
+    class FakeMinio:
+        def __init__(self, endpoint, **kwargs):
+            nonlocal created_endpoint
+            created_endpoint = endpoint
+
+    monkeypatch.setattr(minio_client, "Minio", FakeMinio)
+    monkeypatch.setattr(config, "MINIO_ENDPOINT", "http://minio:9000")
+    minio_client.get_client()
+    assert created_endpoint == "minio:9000"
+
+    monkeypatch.setattr(config, "MINIO_ENDPOINT", "https://minio:9000")
+    minio_client.get_client()
+    assert created_endpoint == "minio:9000"
