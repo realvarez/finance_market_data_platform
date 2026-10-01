@@ -31,4 +31,5 @@ def test_compose_kafka_and_ui_config():
     assert "control-center" not in services
     assert "akhq" in services
     assert "ui" in services["akhq"].get("profiles", [])
-    assert services["akhq"]["mem_limit"] == "128m"
+    assert services["akhq"]["mem_limit"] == "384m"
+    assert "JAVA_OPTS" in services["akhq"]["environment"]

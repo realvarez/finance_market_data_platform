@@ -6,7 +6,7 @@
 |:---|:---|:---|:---|:---|:---|:---|:---|
 | broker | broker | 9092, 9101 | 29092, 9101 | 768 MB | 1.0 core | default | Kafka broker (KRaft, `-Xms256m -Xmx512m`) |
 | kafka-init | kafka-init | — | — | 128 MB | 0.5 core | default | One-shot topic bootstrap |
-| akhq | akhq | 9021 | 8080 | 128 MB | 0.5 core | `ui` | Lightweight Kafka web UI |
+| akhq | akhq | 9021 | 8080 | 384 MB | 0.5 core | `ui` | Lightweight Kafka web UI (`-Xms128m -Xmx256m`) |
 | airflow | airflow | 8080 | 8080 | 1024 MB | 1.5 cores | default | Airflow standalone (tuned 60s parser) |
 | postgres | postgres_db | — | 5432 | 192 MB | 0.5 core | default | Airflow metadata DB (`shared_buffers=64MB`) |
 | minio | minio | 9000, 9001 | 9000, 9001 | 256 MB | 0.5 core | default | S3-compatible object storage |
