@@ -1,11 +1,10 @@
 from pathlib import Path
+
 import yaml
 
 
 def test_compose_kafka_and_ui_config():
-    compose_path = (
-        Path(__file__).resolve().parent.parent / "docker-compose.yml"
-    )
+    compose_path = Path(__file__).resolve().parent.parent / "docker-compose.yml"
     with open(compose_path) as f:
         config = yaml.safe_load(f)
 
@@ -19,9 +18,9 @@ def test_compose_kafka_and_ui_config():
     assert broker["mem_limit"] == "768m"
 
     # Schema Registry assertions (should be removed from default services)
-    assert "schema-registry" not in services or "debug" in services.get(
-        "schema-registry", {}
-    ).get("profiles", [])
+    assert "schema-registry" not in services or "debug" in services.get("schema-registry", {}).get(
+        "profiles", []
+    )
 
     # Kafka Init assertions
     kafka_init = services["kafka-init"]

@@ -1,11 +1,10 @@
 from pathlib import Path
+
 import yaml
 
 
 def test_compose_spark_consolidation():
-    compose_path = (
-        Path(__file__).resolve().parent.parent / "docker-compose.yml"
-    )
+    compose_path = Path(__file__).resolve().parent.parent / "docker-compose.yml"
     with open(compose_path) as f:
         config = yaml.safe_load(f)
 
