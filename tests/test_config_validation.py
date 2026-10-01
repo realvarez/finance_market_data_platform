@@ -4,11 +4,7 @@ from pathlib import Path
 
 def test_clickhouse_memory_xml():
     xml_path = (
-        Path(__file__).resolve().parent.parent
-        / "infra"
-        / "clickhouse"
-        / "config.d"
-        / "memory.xml"
+        Path(__file__).resolve().parent.parent / "infra" / "clickhouse" / "config.d" / "memory.xml"
     )
     assert xml_path.exists(), f"File {xml_path} does not exist"
 
