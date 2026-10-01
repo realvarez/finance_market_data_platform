@@ -30,6 +30,7 @@ def create_spark_connection(name: str) -> SparkSession | None:
         spark = (
             SparkSession.builder.appName(name)
             .config("spark.jars.packages", ",".join(packages))
+            .config("spark.sql.shuffle.partitions", "2")
             .config("spark.hadoop.fs.s3a.endpoint", MINIO_ENDPOINT)
             .config("spark.hadoop.fs.s3a.access.key", MINIO_ACCESS_KEY)
             .config("spark.hadoop.fs.s3a.secret.key", MINIO_SECRET_KEY)
