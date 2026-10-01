@@ -12,6 +12,8 @@ def get_client():
         host=config.CLICKHOUSE_HOST,
         port=config.CLICKHOUSE_PORT,
         database=config.CLICKHOUSE_DATABASE,
+        username=config.CLICKHOUSE_USER,
+        password=config.CLICKHOUSE_PASSWORD,
     )
 
 

@@ -26,6 +26,8 @@ MINIO_CHECKPOINT_BUCKET = os.getenv("MINIO_CHECKPOINT_BUCKET", MINIO_BUCKET)
 CLICKHOUSE_HOST = os.getenv("CLICKHOUSE_HOST", "clickhouse")
 CLICKHOUSE_PORT = int(os.getenv("CLICKHOUSE_PORT", "8123"))
 CLICKHOUSE_DATABASE = os.getenv("CLICKHOUSE_DATABASE", "market_platform")
+CLICKHOUSE_USER = os.getenv("CLICKHOUSE_USER", "clickhouse")
+CLICKHOUSE_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "clickhouse")
 
 # Project Paths & Schemas
 SCHEMAS_DIR = Path(__file__).resolve().parent.parent / "schemas" / "v1"
