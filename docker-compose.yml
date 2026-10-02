@@ -50,7 +50,7 @@ services:
       - ./infra/kafka/init-topics.sh:/init-topics.sh
     environment:
       KAFKA_BOOTSTRAP_SERVERS: broker:29092
-    entrypoint: [ "bash", "/init-topics.sh" ]
+    entrypoint: [ "/bin/bash", "-c", "tr -d '\\r' < /init-topics.sh | /bin/bash" ]
     mem_limit: 128m
     restart: "no"
     networks:
