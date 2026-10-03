@@ -1,8 +1,16 @@
 import logging
 
+from ingestion import config
 from storage import clickhouse_client, minio_client
 
 logger = logging.getLogger(__name__)
+
+# MinIO prefix per source. Calculated candles must not sit under raw/, where a reader would
+# assume they are Yahoo data — they are Spark's reconstruction from ticks.
+_PREFIX_BY_SOURCE = {
+    config.SOURCE_RECONCILED: "reconciled/candles",
+    config.SOURCE_SPARK: "calculated/candles",
+}
 
 
 def sink_ticks(records: list[dict]) -> None:
@@ -21,7 +29,7 @@ def sink_ticks(records: list[dict]) -> None:
 def sink_candles(records: list[dict], source: str = "raw") -> None:
     if not records:
         return
-    prefix = "reconciled/candles" if source == "reconciled" else "raw/candles"
+    prefix = _PREFIX_BY_SOURCE.get(source, "raw/candles")
     for record in records:
         try:
             minio_client.write_parquet(

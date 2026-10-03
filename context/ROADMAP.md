@@ -130,20 +130,25 @@ exponential backoff. Low impact, worth aligning for consistency.
 ## Milestone C — Storage & Streaming (Phases 5, 6, 9)
 
 ### Phase 5 — Raw Market Data Storage
-**Status:** Partial
+**Status:** Complete
 
 - [x] MinIO in Docker Compose
 - [x] Parquet writer in `storage/minio_client.py`
 - [x] Partition layout: `symbol/year/month/day`
 - [x] Continuous **tick** sink from Kafka to MinIO (`tick-sink` compose service)
-- [ ] **Continuous candle sink** — no service consumes `market.candles.raw` or
-      `market.candles.calculated` to write storage. `sink_candles` and `insert_candles` exist but the
-      only caller is reconciliation writing reconciled rows, so `market_candles` in ClickHouse is
-      empty and MinIO holds no candle Parquet. Mirror `storage/tick_sink.py` for both candle topics
-- [ ] Persist raw and calculated candles to ClickHouse **and** MinIO with `source` distinguished
+- [x] Continuous **candle** sink for `market.candles.raw` and `market.candles.calculated`
+      (`candle-sink` compose service, `storage/candle_sink.py`)
+- [x] Raw and calculated candles persisted to ClickHouse **and** MinIO with `source` distinguished,
+      and routed to distinct prefixes (`raw/` vs `calculated/`) so Spark candles never sit under a
+      path that reads as Yahoo data
+- [x] Candle sink validates against `market_candle.schema.json` before writing — the Spark path
+      publishes without validating, so this is the last checkpoint before storage. Failures go to
+      `market.errors` ([ADR-004](DECISIONS.md#adr-004-json-schema-for-data-contracts))
+- [x] Shared sink loop extracted to `storage/kafka_sink.py`, so both sinks have one tested
+      implementation of broker retry, signal handling, and batching
 
-**This is the first thing to build.** Reconciliation, data quality, and feature engineering all read
-ClickHouse, so they are reading an empty table until this lands.
+**Note:** `market.candles.raw` stays empty until the Airflow DAGs are unpaused — compose sets
+`DAGS_ARE_PAUSED_AT_CREATION=true`.
 
 ---
 
@@ -471,15 +476,14 @@ flowchart TD
 
 ## Recommended Order from Here
 
-1. **Phase 5** — build the candle sink. Nothing downstream can read candles until this lands
-2. **Phase 9** — idempotent candle storage (`ReplacingMergeTree`), so overlapping windows are safe
-3. **Phase 8** — rewrite reconciliation against ClickHouse; fix the price tolerance
-4. **Phase 11** — strengthen the completeness check; implement the latency check
-5. **Verification Gate** — build `verify_pipeline`; demonstrate it passing
-6. **Phase 14** — signal engine *(unblocked)*
-7. **Phases 15–16** — backtesting and look-ahead-bias prevention
-8. **Phases 17–19** — risk engine, paper trading, portfolio
-9. **Phases 21–22** — API and dashboard
-10. **Phase 25** — CI, then **Phase 23** — full observability
+1. **Phase 5, 9** — ✅ done: candle sink built, storage idempotent
+2. **Phase 8** — rewrite reconciliation against ClickHouse; fix the price tolerance
+3. **Phase 11** — strengthen the completeness check; implement the latency check
+4. **Verification Gate** — build `verify_pipeline`; demonstrate it passing
+5. **Phase 14** — signal engine *(unblocked)*
+6. **Phases 15–16** — backtesting and look-ahead-bias prevention
+7. **Phases 17–19** — risk engine, paper trading, portfolio
+8. **Phases 21–22** — API and dashboard
+9. **Phase 25** — CI, then **Phase 23** — full observability
 
 Deferred: dbt (P12), Prometheus/Grafana (P23), live broker (P20), ML (P24), cloud deployment (P26).

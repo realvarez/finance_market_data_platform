@@ -14,7 +14,8 @@
 | clickhouse | clickhouse | 8123, 9009 | 8123, 9000 | 1280 MB | 1.0 core | default | Analytical database (no internal mem cap; cgroup-bound) |
 | candle-builder | candle-builder | — | — | 1024 MB | 1.5 cores | default | Spark streaming standalone (`--master local[2]`) |
 | tick-ingestion | tick-ingestion | — | — | 192 MB | 0.5 core | default | Yahoo WebSocket tick service |
-| tick-sink | tick-sink | — | — | 192 MB | 0.5 core | default | *(Stage 1)* market.ticks → MinIO / ClickHouse |
+| tick-sink | tick-sink | — | — | 192 MB | 0.5 core | default | `market.ticks` → MinIO / ClickHouse |
+| candle-sink | candle-sink | — | — | 192 MB | 0.5 core | default | `market.candles.raw` + `.calculated` → MinIO / ClickHouse, validates against the candle schema |
 | spark-master | spark-master | 8082, 7077 | 8080, 7077 | 384 MB | 0.5 core | `spark-cluster` | Optional distributed Spark master |
 | spark-worker | spark-worker | — | 8081 | 768 MB | 1.0 core | `spark-cluster` | Optional distributed Spark worker |
 
