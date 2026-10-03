@@ -31,9 +31,9 @@ CREATE TABLE IF NOT EXISTS market_platform.market_candles
     created_at            DateTime64(3, 'UTC'),
     reconciliation_status Nullable(String)
 )
-ENGINE = MergeTree()
+ENGINE = ReplacingMergeTree(created_at)
 PARTITION BY toYYYYMM(timestamp)
-ORDER BY (symbol, interval, timestamp);
+ORDER BY (symbol, interval, timestamp, source);
 
 CREATE TABLE IF NOT EXISTS market_platform.market_features
 (

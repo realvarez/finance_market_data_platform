@@ -95,7 +95,7 @@ def query_candles(symbol: str, interval: str, source: str, limit: int = 100) -> 
     result = client.query(
         """
         SELECT event_id, symbol, interval, timestamp, open, high, low, close, volume, source
-        FROM market_candles
+        FROM market_candles FINAL
         WHERE symbol = {symbol:String} AND interval = {interval:String} AND source = {source:String}
         ORDER BY timestamp DESC
         LIMIT {limit:UInt32}

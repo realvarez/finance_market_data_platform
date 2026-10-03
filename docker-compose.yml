@@ -112,7 +112,9 @@ services:
     ports:
       - "8123:8123"
       - "9009:9000"
-    mem_limit: 768m
+    # 768m left only ~70MB headroom over ClickHouse's observed ~695MB RSS, which made
+    # OPTIMIZE and heavier queries fail with MEMORY_LIMIT_EXCEEDED.
+    mem_limit: 1280m
     mem_reservation: 384m
     cpus: 1.0
     volumes:
@@ -246,6 +248,14 @@ services:
     mem_limit: 192m
     cpus: 0.5
     restart: unless-stopped
+    # Source is mounted (not baked) so code edits need only `docker compose restart`, matching
+    # the airflow service. Rebuild the image only when pyproject.toml / uv.lock change.
+    volumes:
+      - ./ingestion:/app/ingestion
+      - ./entrypoint:/app/entrypoint
+      - ./schemas:/app/schemas
+      - ./storage:/app/storage
+      - ./utils:/app/utils
     networks:
       - market_platform_network
 
@@ -278,6 +288,14 @@ services:
     mem_limit: 192m
     cpus: 0.5
     restart: unless-stopped
+    # Source is mounted (not baked) so code edits need only `docker compose restart`, matching
+    # the airflow service. Rebuild the image only when pyproject.toml / uv.lock change.
+    volumes:
+      - ./ingestion:/app/ingestion
+      - ./entrypoint:/app/entrypoint
+      - ./schemas:/app/schemas
+      - ./storage:/app/storage
+      - ./utils:/app/utils
     networks:
       - market_platform_network
 

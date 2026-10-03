@@ -1,6 +1,8 @@
 <clickhouse>
-    <!-- Cap server-wide memory allocation to 512MB for local development -->
-    <max_server_memory_usage>536870912</max_server_memory_usage>
+    <!-- No max_server_memory_usage override: ClickHouse's own footprint is ~460MB idle and
+         grows past 650MB, so any cap set near that makes the server fail ordinary queries with
+         MEMORY_LIMIT_EXCEEDED. The container's mem_limit (768m) is the real bound.
+         Add a cap back only if a query is measurably starving its neighbours. -->
     <!-- Cap mark cache size to 64MB -->
     <mark_cache_size>67108864</mark_cache_size>
 </clickhouse>
