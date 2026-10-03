@@ -32,14 +32,17 @@ All services should show `healthy` or `running`.
 
 ## Service URLs
 
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| Airflow | http://localhost:8080 | — (dev mode: all-admins, no login) |
-| Kafka Control Center | http://localhost:9021 | — |
-| Schema Registry | http://localhost:8081 | — |
-| MinIO Console | http://localhost:9001 | minioadmin / minioadmin |
-| ClickHouse HTTP | http://localhost:8123 | default / (empty) |
-| Spark Master UI | http://localhost:8082 | — |
+| Service | URL | Credentials | Profile |
+|---------|-----|-------------|---------|
+| Airflow | http://localhost:8080 | — (dev mode: all-admins, no login) | default |
+| MinIO Console | http://localhost:9001 | minioadmin / minioadmin | default |
+| ClickHouse HTTP | http://localhost:8123 | clickhouse / clickhouse | default |
+| AKHQ (Kafka UI) | http://localhost:9021 | — | `ui` |
+| Spark Master UI | http://localhost:8082 | — | `spark-cluster` |
+
+AKHQ and Spark Master are optional and are **not** started by `docker compose up -d`. Start them with
+`--profile ui` or `--profile spark-cluster` respectively. There is no Schema Registry — schema
+validation is client-side via `jsonschema`.
 
 See [services.md](services.md) for full port map.
 
@@ -72,6 +75,11 @@ environment:
 1. Open http://localhost:8080 (no login required in dev mode)
 2. Unpause the candle and reconciliation DAGs
 
+> **Known issue:** the reconciliation DAG currently reconciles nothing — it reads Kafka topic offsets
+> with a 10-second window on a 5-minute schedule. It is being rewritten to compare candles in
+> ClickHouse. See [context/CURRENT_STATE.md](../context/CURRENT_STATE.md) and
+> [ADR-009](../context/DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation).
+
 ## Run Spark Streaming Locally
 
 The `candle-builder` service submits the streaming job automatically on startup:
@@ -81,13 +89,19 @@ docker compose up -d candle-builder
 docker compose logs -f candle-builder
 ```
 
-To submit manually instead (e.g. for development):
+To submit manually inside the same container instead (e.g. for development):
 
 ```bash
-docker compose exec spark-master /opt/spark/bin/spark-submit \
-  --master spark://spark-master:7077 \
+docker compose exec candle-builder /opt/spark/bin/spark-submit \
+  --master local[2] \
+  --driver-memory 768m \
+  --conf spark.sql.shuffle.partitions=2 \
+  --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.2,org.apache.hadoop:hadoop-aws:3.4.1,com.amazonaws:aws-java-sdk-bundle:1.12.780 \
   /opt/spark/apps/stream_candle_builder.py
 ```
+
+To run against a distributed Spark cluster instead, start it with `--profile spark-cluster` and
+submit with `--master spark://spark-master:7077`. The cluster profile is off by default.
 
 ## Run Tests
 

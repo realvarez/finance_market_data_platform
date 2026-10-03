@@ -38,17 +38,25 @@ flowchart TB
 
     YF_WS --> TickSvc --> Kafka
     YF_API --> Airflow --> Kafka
+    Kafka --> TickSink[Tick Sink]
+    TickSink --> MinIO
+    TickSink --> CH
     Kafka --> Spark
     Spark --> Kafka
-    Kafka --> Recon
-    Recon --> Kafka
-    Kafka --> MinIO
-    Recon --> CH
     Spark --> CH
+    CH --> Recon
+    Recon --> Kafka
+    Recon --> CH
     CH --> Features --> Strategy --> Risk --> Broker --> Portfolio
     Portfolio --> API --> Dashboard
     Kafka --> Grafana
 ```
+
+> **Two gaps in the diagram above.** First, `Kafka → MinIO` for candles does not exist: no service
+> consumes `market.candles.raw` or `market.candles.calculated` to write storage, so `market_candles`
+> in ClickHouse is empty and MinIO holds no candle Parquet. A candle sink is being added — see
+> [ROADMAP.md](ROADMAP.md) Phase 5. Second, `CH → Recon` is aspirational: reconciliation currently
+> consumes Kafka offsets instead ([ADR-009](DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)).
 
 ## Component Responsibilities
 
@@ -67,6 +75,7 @@ flowchart TB
 | Service | Type | Responsibility |
 |---------|------|----------------|
 | `tick_service.py` | Long-running | WebSocket → `market.ticks` |
+| `tick_sink_service.py` | Long-running | `market.ticks` → MinIO Parquet + ClickHouse |
 
 ### Orchestration (`airflow/dags/`)
 
@@ -74,10 +83,11 @@ Thin DAGs that call `ingestion/` functions. No business logic.
 
 | DAG | Schedule | Calls |
 |-----|----------|-------|
-| `dag_candles_1m` | Every minute + 10s | `ingestion.candles.fetch_latest_candles(interval='1m')` |
-| `dag_candles_5m` | Every 5 min + 10s | `ingestion.candles.fetch_latest_candles(interval='5m')` |
-| `dag_reconciliation` | Every 5 min | `streaming.reconciliation.reconcile_candles()` |
-| `dag_data_quality` | Hourly | `analysis.data_quality.run_checks()` |
+| `market_candles_1m_dag` (`dag_candles.py`) | Every minute + 10s | `ingestion.candles.fetch_latest_candles(interval='1m')` |
+| `market_candles_5m_dag` (`dag_candles.py`) | Every 5 min + 10s | `ingestion.candles.fetch_latest_candles(interval='5m')` |
+| `market_candles_backfill_dag` (`dag_backfill.py`) | Manual trigger | `ingestion.candles.fetch_candles_range()` — chunked |
+| `market_reconciliation_dag` | Every 5 min | `streaming.reconciliation.reconcile_candles()` — **broken, see below** |
+| `market_data_quality_dag` | Hourly | `analysis.data_quality.run_checks()` → `analysis.features.generate_features()` |
 
 ### Streaming (`streaming/`)
 
@@ -85,7 +95,13 @@ Thin DAGs that call `ingestion/` functions. No business logic.
 |--------|----------------|
 | `stream_candle_builder.py` | Ticks → OHLCV candles (1m, 5m) |
 | `reconciliation.py` | Compare calculated vs raw candles |
-| `utils.py` | Spark session, Kafka read/write helpers |
+| `spark_utils.py` | Spark session, Kafka read/write helpers |
+
+> **Current state:** `reconciliation.py` reads both candle topics from Kafka with a 10-second
+> consumer window on a 5-minute schedule, so it usually reconciles nothing. It is being rewritten to
+> compare candles as a set in ClickHouse over an explicit time window, with Kafka as pure transport
+> ([ADR-009](DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)). Until that
+> lands, the `market.candles.reconciled` branch of this diagram carries no data.
 
 ### Storage (`storage/`)
 
@@ -94,6 +110,7 @@ Thin DAGs that call `ingestion/` functions. No business logic.
 | `minio_client.py` | S3-compatible Parquet writes |
 | `clickhouse_client.py` | Analytical inserts and queries |
 | `sinks.py` | Unified sink interface for ticks/candles |
+| `tick_sink.py` | Long-running consumer: `market.ticks` → MinIO + ClickHouse, batched with backoff |
 
 ### Analysis (`analysis/`)
 
@@ -106,12 +123,12 @@ Thin DAGs that call `ingestion/` functions. No business logic.
 
 | Topic | Producer | Consumer |
 |-------|----------|----------|
-| `market.ticks` | Tick service | Spark, MinIO sink |
-| `market.candles.raw` | Airflow candle DAGs | Reconciliation, ClickHouse |
-| `market.candles.calculated` | Spark streaming | Reconciliation, ClickHouse |
-| `market.candles.reconciled` | Reconciliation | ClickHouse, MinIO, Features |
+| `market.ticks` | Tick service | Spark, tick sink |
+| `market.candles.raw` | Airflow candle DAGs | Reconciliation — **no storage consumer exists yet** |
+| `market.candles.calculated` | Spark streaming | Reconciliation — **no storage consumer exists yet** |
+| `market.candles.reconciled` | Reconciliation | ClickHouse, MinIO, features |
 | `market.signals` | Signal engine | Risk engine, API |
-| `market.errors` | All ingestion | Monitoring |
+| `market.errors` | All ingestion | **none — topic is written but never consumed** |
 
 ## MinIO Partition Layout
 
@@ -124,11 +141,21 @@ market-data/
 
 ## ClickHouse Tables
 
-- `market_ticks` — Raw tick events
-- `market_candles` — Raw, calculated, and reconciled candles (source column distinguishes)
-- `market_features` — Computed indicators
-- `market_signals` — Strategy outputs
-- `orders`, `trades`, `positions` — Trading state (future phases)
+All in database `market_platform` (`infra/clickhouse/init.sql`):
+
+| Table | Contents | Written by |
+|-------|----------|------------|
+| `market_ticks` | Raw tick events | `tick-sink` service |
+| `market_candles` | Raw, calculated, and reconciled candles (`source` distinguishes) | candle DAGs, Spark, reconciliation |
+| `market_features` | Computed indicators | `analysis/features.py` |
+| `market_signals` | Strategy outputs | *not yet — schema only* |
+| `market_orders`, `market_trades` | Trading state | *not yet — DDL only* |
+| `market_positions` | Current positions | *not yet — DDL only* |
+
+`market_candles` is currently a plain `MergeTree`, so re-writing the same candle key duplicates rows.
+It is being migrated to `ReplacingMergeTree(replaced_at)` ordered by
+`(symbol, interval, timestamp, source)` so reconciliation can re-run over overlapping windows
+([ADR-011](DECISIONS.md#adr-011-candle-storage-is-idempotent-by-key)).
 
 ## Technology Stack
 
