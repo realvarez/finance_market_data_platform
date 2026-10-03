@@ -1,9 +1,21 @@
 # Candle Persistence & Verification — Implementation Plan
 
 - **Date:** 2026-10-02
-- **Status:** Approved — documentation pass complete, implementation pending
+- **Status:** Step 2 complete (PR #2). Steps 3–7 pending.
 - **Audience:** a fresh agent picking this up cold. Everything needed to start is in this file plus
   `context/`.
+
+### Step status
+
+| Step | Scope | Status |
+|------|-------|--------|
+| 1 | Correct the record | ✅ done |
+| 2 | Idempotent candle storage | ✅ done — PR #2 |
+| 3 | Candle sink service | ⬜ next |
+| 4 | Reconciliation on ClickHouse | ⬜ blocked by 3 |
+| 5 | DAG wiring + loud fallback | ⬜ blocked by 4 |
+| 6 | `verify_pipeline` | ⬜ blocked by 5 |
+| 7 | Live proof + close the record | ⬜ blocked by 6; **needs market hours** |
 
 ---
 
@@ -125,25 +137,18 @@ Precedent exists — `market_positions` already uses `ReplacingMergeTree(updated
 > **Decision point for the owner or agent.** ADR-011 specifies a *new* `replaced_at DateTime64(3)`
 > version column. The existing `created_at` is already `DateTime64(3)` and is already populated on
 > every insert path — Spark sets it to `current_timestamp()`, reconciliation sets it to
-> `datetime.now(utc)`. **Recommendation: reuse `created_at`** rather than adding a column, and amend
-> ADR-011 to match. Fewer moving parts, no changes to insert callers. If you add `replaced_at`
-> instead, `CANDLE_COLUMNS` and every writer need updating.
+> `datetime.now(utc)`. **Resolved: reuse `created_at`** — done in PR #2. It became
+> `ReplacingMergeTree(created_at)` ordered by `(symbol, interval, timestamp, source)`, and all
+> candle reads use `FINAL`. `market_positions` already used this pattern. ADR-011 still says
+> `replaced_at` and should be amended to match.
 
-`source` must be appended to `ORDER BY`. This is what keeps the raw, calculated, and reconciled
-series of the same candle as distinct, comparable rows — the entire point of reconciliation.
+`FINAL` is load-bearing, not decorative. Merges are asynchronous, so a reader can observe duplicates
+at any moment. Measured with merges stopped and two separate inserts: **2 rows without `FINAL`,
+1 with it**. Note that a single `insert()` call containing duplicate rows is already collapsed at
+insert time, so a test must use separate calls to have teeth.
 
-**`clickhouse_client.py`** — all candle reads need `FINAL`:
-
-```sql
-SELECT ... FROM market_candles FINAL
-WHERE symbol = {symbol:String} AND interval = {interval:String} AND source = {source:String}
-ORDER BY timestamp DESC LIMIT {limit:UInt32}
-```
-
-`FINAL` is acceptable at local data volumes and keeps query semantics honest rather than relying on
-merges having happened.
-
-Also add the windowed query that Step 4 depends on:
+The windowed query for Step 4 is **not** built yet (YAGNI until reconciliation calls it). Step 4
+adds it:
 
 ```python
 def query_candles_window(
@@ -493,11 +498,22 @@ From `.agents/AGENTS.md` and the ADRs — these are enforced by project conventi
   existing services' limits will fail these. That brittleness is itself Roadmap Phase 25 debt.
 - **Line endings:** `.gitattributes` enforces LF. A CRLF bug once shipped (`14ba702`). Write files
   with LF; do not edit `.sh` or `.yml` from a CRLF source.
-- **`market_positions` already uses `ReplacingMergeTree(updated_at)`** — follow that pattern for
-  `market_candles` rather than inventing a new one.
-- The `Dockerfile` copies only `ingestion/`, `entrypoint/`, `schemas/`, `storage/`, `utils/`.
+- **The `Dockerfile` copies only `ingestion/`, `entrypoint/`, `schemas/`, `storage/`, `utils/`.**
   `streaming/` and `analysis/` are mounted by the Spark and Airflow services respectively. Anything
   new must live in a copied directory or be added to the image.
+- **`docker compose up` does not rebuild.** `tick-ingestion` and `tick-sink` used to bake their code
+  into the image, so `up` reused a cached build predating `CLICKHOUSE_USER`; tick-sink then
+  authenticated as `default` and every insert failed silently, because `sink_ticks` logs and
+  continues. Both now mount the source like the other services, so a code edit needs only
+  `docker compose restart <service>`. Rebuild only when `pyproject.toml` / `uv.lock` change.
+- **ClickHouse needs real headroom.** `max_server_memory_usage` at 512MB sat below the server's own
+  ~460MB baseline and it could not answer even `SELECT 1`. The override is gone and `mem_limit` is
+  1280m; observed RSS is ~413MB idle. If queries fail with `MEMORY_LIMIT_EXCEEDED`, check
+  `docker stats` before touching config.
+- **`init.sql` is skipped when the volume already holds data** — the entrypoint logs *"Database
+  directory appears to contain a database; Skipping initialization"*. A fresh clone gets new DDL;
+  an existing stack does not. After editing `init.sql`, either `docker compose down -v`, or drop the
+  table and re-apply by hand.
 
 ---
 
