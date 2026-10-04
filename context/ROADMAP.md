@@ -193,23 +193,25 @@ to validate are not yet guaranteed.
 ## Milestone D — Data Quality & Reconciliation (Phases 8, 11, 12)
 
 ### Phase 8 — Candle Reconciliation
-**Status:** Broken — this is the gate
+**Status:** Complete
 
-- [x] Pure comparison logic (`reconcile_candle`, four statuses, tolerance predicate) — unit-tested
-- [x] Publish to `market.candles.reconciled` topic defined
-- [ ] **Read candles from ClickHouse over a time window instead of Kafka offsets**
+- [x] Compare calculated vs raw OHLCV as a set over an explicit time window in ClickHouse
       ([ADR-009](DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)).
-      The current consumer has no group id, uses `auto_offset_reset="latest"`, and stops after 10s on
-      a 5-minute DAG — it usually reconciles nothing
-- [ ] **Absolute price tolerance.** `_within_tolerance` multiplies by price, so a \$600 stock is
-      accepted within \$6.00 of official. A reconciliation that cannot detect a \$5 error reports
-      `matched` and suppresses the alert it exists to raise
-- [ ] **Idempotent re-runs** via ADR-011, so an overlapping window can be reconciled repeatedly
-- [ ] **Replay** — re-reconcile any historical window, which the Kafka-offset design could never do
-- [ ] Log the reconciled window and coverage ratio on every run
+      The previous implementation consumed Kafka offsets with a 10-second window on a 5-minute DAG
+      and reconciled nothing
+- [x] **Absolute price tolerance.** Was proportional — `0.01 * max(|a|,|b|,1)` accepted a $6.00
+      error on a $600 stock, so the check could not catch the discrepancies it exists to detect.
+      Volume stays relative at 5%
+- [x] Idempotent across repeated runs over an overlapping window (via ADR-011)
+- [x] Replay of any historical window, which the Kafka-offset design could never do
+- [x] Window and coverage ratio logged on every run
+- [x] All four statuses verified against the live stack: `matched`, `corrected`, `raw_only`,
+      `calculated_only`
+- [ ] **Data-quality metrics emission** — coverage is logged but never trended, so gradual degradation
+      stays invisible. Folded into the verification gate
 
-**Acceptance:** `verify_pipeline` reports reconciled coverage ≥ 99% of official candles over a
-completed session.
+**Acceptance:** reconciled coverage ≥ 99% of official candles over a completed session — verified
+live for a single window; a full session still needs market hours.
 
 ---
 

@@ -1,7 +1,7 @@
 # Candle Persistence & Verification — Implementation Plan
 
 - **Date:** 2026-10-02
-- **Status:** Step 2 complete (PR #2). Steps 3–7 pending.
+- **Status:** Steps 2–4 complete (PRs #2, #3, #4). Steps 5–7 pending.
 - **Audience:** a fresh agent picking this up cold. Everything needed to start is in this file plus
   `context/`.
 
@@ -11,8 +11,8 @@
 |------|-------|--------|
 | 1 | Correct the record | ✅ done |
 | 2 | Idempotent candle storage | ✅ done — PR #2 |
-| 3 | Candle sink service | ⬜ next |
-| 4 | Reconciliation on ClickHouse | ⬜ blocked by 3 |
+| 3 | Candle sink service | ✅ done — PR #3 |
+| 4 | Reconciliation on ClickHouse | ✅ done — PR #4 |
 | 5 | DAG wiring + loud fallback | ⬜ blocked by 4 |
 | 6 | `verify_pipeline` | ⬜ blocked by 5 |
 | 7 | Live proof + close the record | ⬜ blocked by 6; **needs market hours** |
