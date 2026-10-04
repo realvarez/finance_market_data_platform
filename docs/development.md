@@ -12,7 +12,8 @@ market_platform/
 ├── airflow/dags/    # Thin orchestration DAGs
 ├── schemas/v1/      # JSON Schema contracts
 ├── infra/           # Topic init, ClickHouse DDL
-└── tests/           # Unit and integration tests
+├── context/         # Objective, architecture, decisions, roadmap
+└── tests/           # Unit tests (no integration tests yet)
 ```
 
 ## Running Ingestion Locally
@@ -40,6 +41,35 @@ fetch_latest_candles(symbol='NVDA', interval='1m', overlap_minutes=5)
 export KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 uv run python -m streaming.stream_candle_builder
 ```
+
+## Code Changes and Container Images
+
+The Python services (`tick-ingestion`, `tick-sink`, `airflow`) **mount** the source directories
+rather than baking them into the image. A code edit therefore needs only:
+
+```bash
+docker compose restart tick-sink
+```
+
+No rebuild required. This matches what the airflow service already did, and it exists because a
+baked image caused a real failure: `docker compose up` silently reused a cached image whose
+`ingestion/config.py` predated `CLICKHOUSE_USER`, so `tick-sink` authenticated to ClickHouse as
+`default` and every insert failed — while the sink kept running and kept committing offsets, because
+`sink_ticks` swallows ClickHouse errors after logging them.
+
+**Rebuild only when dependencies change** (`pyproject.toml` or `uv.lock`):
+
+```bash
+docker compose build && docker compose up -d
+```
+
+`docker compose up --build` does the same thing in one step. There is no "always rebuild" setting on
+`up`; the per-service `pull_policy: build` key exists and validates, but it rebuilds on every `up`
+even when nothing changed, which the source mounts make unnecessary.
+
+> **Rule of thumb:** if you edit Python, restart the service. If you are unsure whether the container
+> is running your latest code, check it rather than assuming —
+> `docker compose exec tick-sink grep -c SYMBOL_NAME /app/ingestion/config.py`.
 
 ## Adding a New Symbol
 
@@ -171,12 +201,17 @@ my_dag()
 | Variable | Default | Used By |
 |----------|---------|---------|
 | `KAFKA_BOOTSTRAP_SERVERS` | `broker:29092` | All Kafka clients |
-| `SYMBOLS` | `NVDA,AAPL,SPY` | Tick service |
+| `SYMBOLS` | `GOOGL,NVDA,AMZN,TSLA` | Tick service (compose default is `BTC-USD,NVDA,MSTR,NU,HIMS,MU`) |
 | `MINIO_ENDPOINT` | `minio:9000` | Storage sinks |
 | `MINIO_ACCESS_KEY` | `minioadmin` | Storage sinks |
 | `MINIO_SECRET_KEY` | `minioadmin` | Storage sinks |
 | `CLICKHOUSE_HOST` | `clickhouse` | Storage sinks |
 | `CLICKHOUSE_PORT` | `8123` | Storage sinks |
+| `CLICKHOUSE_DATABASE` | `market_platform` | Storage sinks |
+| `SPARK_WATERMARK_DELAY` | `10 seconds` | Spark candle builder |
+
+Credentials are overridable via a `.env` file — copy `.env.example` to `.env` and edit. Values shown
+above are the built-in fallbacks in `ingestion/config.py`.
 
 ## Code Conventions
 

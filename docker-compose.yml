@@ -112,7 +112,9 @@ services:
     ports:
       - "8123:8123"
       - "9009:9000"
-    mem_limit: 768m
+    # 768m left only ~70MB headroom over ClickHouse's observed ~695MB RSS, which made
+    # OPTIMIZE and heavier queries fail with MEMORY_LIMIT_EXCEEDED.
+    mem_limit: 1280m
     mem_reservation: 384m
     cpus: 1.0
     volumes:
@@ -200,6 +202,8 @@ services:
     # --packages is REQUIRED under spark-submit: spark.jars.packages set inside
     # SparkSession.builder is ignored when submitting a job (connector versions
     # matched to the 4.0.2 runtime / Hadoop 3.4.1).
+    ports:
+      - "4040:4040"
     command: >
       /opt/spark/bin/spark-submit --master local[2] --driver-memory 768m --conf spark.sql.shuffle.partitions=2 --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.2,org.apache.hadoop:hadoop-aws:3.4.1,com.amazonaws:aws-java-sdk-bundle:1.12.780 /opt/spark/apps/stream_candle_builder.py
     depends_on:
@@ -246,6 +250,14 @@ services:
     mem_limit: 192m
     cpus: 0.5
     restart: unless-stopped
+    # Source is mounted (not baked) so code edits need only `docker compose restart`, matching
+    # the airflow service. Rebuild the image only when pyproject.toml / uv.lock change.
+    volumes:
+      - ./ingestion:/app/ingestion
+      - ./entrypoint:/app/entrypoint
+      - ./schemas:/app/schemas
+      - ./storage:/app/storage
+      - ./utils:/app/utils
     networks:
       - market_platform_network
 
@@ -278,6 +290,54 @@ services:
     mem_limit: 192m
     cpus: 0.5
     restart: unless-stopped
+    # Source is mounted (not baked) so code edits need only `docker compose restart`, matching
+    # the airflow service. Rebuild the image only when pyproject.toml / uv.lock change.
+    volumes:
+      - ./ingestion:/app/ingestion
+      - ./entrypoint:/app/entrypoint
+      - ./schemas:/app/schemas
+      - ./storage:/app/storage
+      - ./utils:/app/utils
+    networks:
+      - market_platform_network
+
+  candle-sink:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: candle-sink
+    command: uv run --no-dev python -m entrypoint.candle_sink_service
+    depends_on:
+      broker:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      clickhouse:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: broker:29092
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE:-market_platform}
+    mem_limit: 192m
+    cpus: 0.5
+    restart: unless-stopped
+    # Source is mounted (not baked) so code edits need only `docker compose restart`, matching
+    # the airflow service. Rebuild the image only when pyproject.toml / uv.lock change.
+    volumes:
+      - ./ingestion:/app/ingestion
+      - ./entrypoint:/app/entrypoint
+      - ./schemas:/app/schemas
+      - ./storage:/app/storage
+      - ./utils:/app/utils
     networks:
       - market_platform_network
 

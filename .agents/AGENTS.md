@@ -41,6 +41,17 @@ Any agent modifying code in this workspace must abide by the following Architect
 ### ADR-007: Reconciliation & Feature Engineering
 *   **Constraint:** Calculated candles (aggregated from ticks) may differ from official historical candles.
 *   **Rule:** Downstream signal and feature engineering engines must read from the reconciled candle topic (`market.candles.reconciled`) or ClickHouse rows where `source='reconciled'`. Never compute features directly from raw/unreconciled candle streams.
+*   **Known gap:** `analysis/features.py` currently falls back to raw `yahoo_finance` candles when no reconciled rows exist. Reconciliation does not yet run reliably, so this fallback is active in practice and every feature value computed to date is unvalidated. See [context/CURRENT_STATE.md](/context/CURRENT_STATE.md).
+
+### ADR-009: ClickHouse Is the Reconciliation Source of Truth
+*   **Constraint:** Kafka is transport, not a store. Do not implement reconciliation (or any other query) by consuming topic offsets.
+*   **Rule:** Compare candles as a set over an explicit time window in ClickHouse. Reconciliation currently violates this and is being rewritten.
+
+### ADR-010: Verification Gates the Trading Stages
+*   **Rule:** Do not begin signal generation, backtesting, risk, paper trading, portfolio, or API work until `verify_pipeline` passes. Trading logic built on unreconciled candles produces results that cannot be believed.
+
+### ADR-011: Candle Storage Is Idempotent by Key
+*   **Rule:** Writing the same `(symbol, interval, timestamp, source)` key twice must not produce two rows. `market_candles` is migrating to `ReplacingMergeTree`; queries must use `FINAL`.
 
 ---
 
@@ -58,7 +69,7 @@ Do not place code files in arbitrary folders. Follow the directory layout conven
 | [airflow/dags/](/airflow/dags/) | Contains thin orchestration definitions. |
 | [schemas/v1/](/schemas/v1/) | Strictly-versioned JSON schemas specifying data contracts. |
 | [infra/](/infra/) | Database DDL initialization scripts, Kafka bootstrap scripts, and configs. |
-| [tests/](/tests/) | Pytest tests for schemas, logic, and integrations. |
+| [tests/](/tests/) | Pytest unit tests for schemas and pure logic. (No integration tests yet.) |
 
 ---
 

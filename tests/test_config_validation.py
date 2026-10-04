@@ -12,9 +12,9 @@ def test_clickhouse_memory_xml():
     root = tree.getroot()
     assert root.tag == "clickhouse"
 
-    mem_usage = root.find("max_server_memory_usage")
-    assert mem_usage is not None
-    assert int(mem_usage.text) == 536870912  # 512 MB
+    # No max_server_memory_usage override by design — see memory.xml. ClickHouse's own
+    # footprint exceeds any cap tight enough to fit the original 3.2GB RAM budget.
+    assert root.find("max_server_memory_usage") is None
 
     mark_cache = root.find("mark_cache_size")
     assert mark_cache is not None

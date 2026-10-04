@@ -17,7 +17,7 @@ def test_compose_storage_and_airflow_bounds():
 
     # ClickHouse
     ch = services["clickhouse"]
-    assert ch["mem_limit"] == "768m"
+    assert ch["mem_limit"] == "1280m"
     assert any("memory.xml" in v for v in ch["volumes"])
 
     # Tick Ingestion

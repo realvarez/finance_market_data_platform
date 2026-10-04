@@ -93,12 +93,25 @@ docker compose exec broker kafka-console-consumer \
 
 ### Produce a test message
 
+The tick schema requires `event_id`, `symbol`, `timestamp`, `ingestion_timestamp`, `price`, and
+`source`; `volume`, `bid`, and `ask` are nullable.
+
 ```bash
-echo '{"event_id":"test1","symbol":"TEST","timestamp":"2026-08-12T14:30:00Z","price":100.0,"source":"test"}' | \
+echo '{"event_id":"TEST20260812143000","symbol":"TEST","timestamp":"2026-08-12T14:30:00Z","ingestion_timestamp":"2026-08-12T14:30:00Z","price":100.0,"source":"yahoo_finance"}' | \
   docker compose exec -T broker kafka-console-producer \
   --bootstrap-server localhost:9092 \
   --topic market.ticks
 ```
+
+## Reconciliation and Topic Retention
+
+Reconciliation currently compares candles by consuming `market.candles.raw` and
+`market.candles.calculated` directly. This is known to be broken — a 10-second consumer window on a
+5-minute schedule usually sees nothing, and both series are subject to retention expiry.
+
+It is being rewritten to read both series from ClickHouse over an explicit time window and treat Kafka
+as pure transport ([ADR-009](../context/DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)).
+Until then, do not rely on `market.candles.reconciled` containing anything.
 
 ## Bootstrap Servers
 

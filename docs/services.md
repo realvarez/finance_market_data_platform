@@ -11,10 +11,11 @@
 | postgres | postgres_db | — | 5432 | 192 MB | 0.5 core | default | Airflow metadata DB (`shared_buffers=64MB`) |
 | minio | minio | 9000, 9001 | 9000, 9001 | 256 MB | 0.5 core | default | S3-compatible object storage |
 | minio-init | minio-init | — | — | 128 MB | 0.5 core | default | One-shot bucket initialization |
-| clickhouse | clickhouse | 8123, 9009 | 8123, 9000 | 768 MB | 1.0 core | default | Analytical database (512MB max memory) |
+| clickhouse | clickhouse | 8123, 9009 | 8123, 9000 | 1280 MB | 1.0 core | default | Analytical database (no internal mem cap; cgroup-bound) |
 | candle-builder | candle-builder | — | — | 1024 MB | 1.5 cores | default | Spark streaming standalone (`--master local[2]`) |
 | tick-ingestion | tick-ingestion | — | — | 192 MB | 0.5 core | default | Yahoo WebSocket tick service |
-| tick-sink | tick-sink | — | — | 192 MB | 0.5 core | default | *(Stage 1)* market.ticks → MinIO / ClickHouse |
+| tick-sink | tick-sink | — | — | 192 MB | 0.5 core | default | `market.ticks` → MinIO / ClickHouse |
+| candle-sink | candle-sink | — | — | 192 MB | 0.5 core | default | `market.candles.raw` + `.calculated` → MinIO / ClickHouse, validates against the candle schema |
 | spark-master | spark-master | 8082, 7077 | 8080, 7077 | 384 MB | 0.5 core | `spark-cluster` | Optional distributed Spark master |
 | spark-worker | spark-worker | — | 8081 | 768 MB | 1.0 core | `spark-cluster` | Optional distributed Spark worker |
 
@@ -68,7 +69,7 @@ curl -f http://localhost:9000/minio/health/live
 
 ## Resource Usage & Profiles
 
-### Default Core Stack (~3.2 GB RAM)
+### Default Core Stack (~3.7 GB RAM)
 Starts only the essential streaming data pipeline:
 ```bash
 docker compose up -d
