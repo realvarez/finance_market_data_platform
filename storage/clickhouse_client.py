@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 import clickhouse_connect
 
@@ -101,6 +102,42 @@ def query_candles(symbol: str, interval: str, source: str, limit: int = 100) -> 
         LIMIT {limit:UInt32}
         """,
         parameters={"symbol": symbol, "interval": interval, "source": source, "limit": limit},
+    )
+    columns = result.column_names
+    return [dict(zip(columns, row)) for row in result.result_rows]
+
+
+def query_candles_window(
+    symbol: str, interval: str, source: str, start: datetime, end: datetime
+) -> list[dict]:
+    """Candles for [start, end), oldest first.
+
+    Deliberately has no LIMIT: reconciliation compares a window as a set, so truncating it would
+    silently hide the very gaps the comparison exists to detect (ADR-009).
+
+    `timestamp` and `created_at` come back as naive datetime in the ClickHouse server's timezone;
+    callers normalise with `datetime(..., tzinfo=timezone.utc)` before formatting payloads.
+    """
+    client = get_client()
+    result = client.query(
+        """
+        SELECT event_id, symbol, interval, timestamp, open, high, low, close, volume, source,
+               reconciliation_status
+        FROM market_candles FINAL
+        WHERE symbol = {symbol:String}
+          AND interval = {interval:String}
+          AND source = {source:String}
+          AND timestamp >= {start:DateTime64(3, 'UTC')}
+          AND timestamp < {end:DateTime64(3, 'UTC')}
+        ORDER BY timestamp ASC
+        """,
+        parameters={
+            "symbol": symbol,
+            "interval": interval,
+            "source": source,
+            "start": start,
+            "end": end,
+        },
     )
     columns = result.column_names
     return [dict(zip(columns, row)) for row in result.result_rows]

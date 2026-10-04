@@ -52,11 +52,8 @@ flowchart TB
     Kafka --> Grafana
 ```
 
-> **Two gaps in the diagram above.** First, `Kafka → MinIO` for candles does not exist: no service
-> consumes `market.candles.raw` or `market.candles.calculated` to write storage, so `market_candles`
-> in ClickHouse is empty and MinIO holds no candle Parquet. A candle sink is being added — see
-> [ROADMAP.md](ROADMAP.md) Phase 5. Second, `CH → Recon` is aspirational: reconciliation currently
-> consumes Kafka offsets instead ([ADR-009](DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)).
+> `candle-sink` consumes both candle topics and feeds ClickHouse and MinIO; `Recon` reads both
+> series from ClickHouse rather than from Kafka.
 
 ## Component Responsibilities
 
@@ -97,11 +94,9 @@ Thin DAGs that call `ingestion/` functions. No business logic.
 | `reconciliation.py` | Compare calculated vs raw candles |
 | `spark_utils.py` | Spark session, Kafka read/write helpers |
 
-> **Current state:** `reconciliation.py` reads both candle topics from Kafka with a 10-second
-> consumer window on a 5-minute schedule, so it usually reconciles nothing. It is being rewritten to
-> compare candles as a set in ClickHouse over an explicit time window, with Kafka as pure transport
-> ([ADR-009](DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)). Until that
-> lands, the `market.candles.reconciled` branch of this diagram carries no data.
+> Reconciliation reads both candle series out of ClickHouse over an explicit time window, with Kafka
+> as pure transport ([ADR-009](DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)).
+> It no longer consumes topic offsets.
 
 ### Storage (`storage/`)
 
