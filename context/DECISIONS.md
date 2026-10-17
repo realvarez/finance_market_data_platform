@@ -163,11 +163,7 @@ This also contradicts the project constraint "Do not treat Kafka as the permanen
 - Reconciliation still *publishes* to `market.candles.reconciled`; the topic remains part of the contract, it is simply not the read path
 - Re-running reconciliation over historical data becomes possible, which the Kafka approach never allowed
 - Requires ADR-011 for idempotent storage
-- **Blocked on candle persistence.** This decision assumes both series already exist in ClickHouse.
-  Today nothing writes them: `sink_candles` has exactly one caller — reconciliation itself — so
-  `market_candles` is empty and the comparison would have no inputs. A candle sink service
-  (mirroring `storage/tick_sink.py`) must land first. This is Roadmap Phase 5 and the first item in
-  the recommended order.
+- **Candle persistence landed (commit `2d4062f`):** Both candle topics are now sunk to ClickHouse and MinIO via `candle-sink` (`storage/candle_sink.py`).
 
 ---
 
@@ -202,7 +198,7 @@ The project's stated north star — build a reliable market-data platform first 
 
 Today this is masked because reconciliation rarely writes anything. The moment ADR-009 lands and reconciliation runs on a schedule over an overlapping window, every re-run will duplicate rows, and `analysis/features.py` will read the same candle several times over — corrupting every indicator computed from it.
 
-**Decision:** `market_candles` becomes `ReplacingMergeTree(replaced_at)` ordered by `(symbol, interval, timestamp, source)`, with a `replaced_at DateTime64(3)` version column written on every insert. Queries read with `FINAL`.
+**Decision:** `market_candles` becomes `ReplacingMergeTree(created_at)` ordered by `(symbol, interval, timestamp, source)`, reusing `created_at DateTime64(3)` as the version column written on every insert. Queries read with `FINAL`.
 
 **Rationale:**
 - Makes re-reconciling an overlapping window idempotent, which ADR-009 depends on

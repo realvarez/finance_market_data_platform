@@ -18,9 +18,10 @@ compose services.
 
 See [context/ARCHITECTURE.md](context/ARCHITECTURE.md) for the full system diagram.
 
-> **Status:** ingestion and streaming work. **Reconciliation is not currently operating** — see
-> [context/CURRENT_STATE.md](context/CURRENT_STATE.md). Trading work is gated on fixing it
-> ([ADR-010](context/DECISIONS.md#adr-010-verification-gates-the-trading-stages)).
+> **Status:** Ingestion, streaming, storage sinks, and ClickHouse reconciliation work. DAGs start paused
+> by default, and feature fallback observability + pipeline verification gate (`verify_pipeline`) are
+> pending — see [context/CURRENT_STATE.md](context/CURRENT_STATE.md) and
+> [ADR-010](context/DECISIONS.md#adr-010-verification-gates-the-trading-stages).
 
 ## Quick Start
 

@@ -69,13 +69,13 @@ curl -f http://localhost:9000/minio/health/live
 
 ## Resource Usage & Profiles
 
-### Default Core Stack (~3.7 GB RAM)
+### Default Core Stack (~3.3 GB RAM)
 Starts only the essential streaming data pipeline:
 ```bash
 docker compose up -d
 ```
 
-### With Topic Inspector UI (~3.3 GB RAM)
+### With Topic Inspector UI (~3.7 GB RAM)
 Adds the lightweight AKHQ management dashboard:
 ```bash
 docker compose --profile ui up -d

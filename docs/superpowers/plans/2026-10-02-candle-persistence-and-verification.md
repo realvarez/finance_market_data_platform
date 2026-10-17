@@ -1,7 +1,7 @@
 # Candle Persistence & Verification — Implementation Plan
 
 - **Date:** 2026-10-02
-- **Status:** Step 2 complete (PR #2). Steps 3–7 pending.
+- **Status:** Steps 2–4 complete (PRs #2, #3, #4). Steps 5–7 pending.
 - **Audience:** a fresh agent picking this up cold. Everything needed to start is in this file plus
   `context/`.
 
@@ -11,8 +11,8 @@
 |------|-------|--------|
 | 1 | Correct the record | ✅ done |
 | 2 | Idempotent candle storage | ✅ done — PR #2 |
-| 3 | Candle sink service | ⬜ next |
-| 4 | Reconciliation on ClickHouse | ⬜ blocked by 3 |
+| 3 | Candle sink service | ✅ done — PR #3 |
+| 4 | Reconciliation on ClickHouse | ✅ done — PR #4 |
 | 5 | DAG wiring + loud fallback | ⬜ blocked by 4 |
 | 6 | `verify_pipeline` | ⬜ blocked by 5 |
 | 7 | Live proof + close the record | ⬜ blocked by 6; **needs market hours** |
@@ -363,7 +363,7 @@ Put the rewritten reconciliation on the schedule, and stop the feature layer fro
 
 ### Changes
 
-DAG: point the existing task at the new function signature. Nothing else. Zero business logic in the
+DAG: point the existing task at the new function signature. *(Done in commit `6411594`: `airflow/dags/dag_reconciliation.py` updated).* Nothing else. Zero business logic in the
 DAG file — that rule is
 [ADR-005](../../context/DECISIONS.md#adr-005-thin-airflow-dags) and is currently respected.
 
@@ -463,7 +463,7 @@ Then update the documentation to record the resolutions:
 - `context/CURRENT_STATE.md` — resolve Debt #1–#5, move the storage/reconciliation rows to "What
   Works", rewrite the summary
 - `context/ROADMAP.md` — Phase 5 → Complete, Phase 8 → Complete, Phase 9 → Complete; un-gate Phase 14
-- `context/DECISIONS.md` — amend ADR-011 if you reused `created_at` instead of adding `replaced_at`
+- `context/DECISIONS.md` — amend ADR-011 if you reused `created_at` instead of adding `replaced_at` *(Done: amended to `ReplacingMergeTree(created_at)`)*
 
 ---
 

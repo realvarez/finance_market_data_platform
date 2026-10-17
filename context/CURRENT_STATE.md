@@ -10,20 +10,19 @@ and Yahoo's official candles reach `market.candles.raw` on schedule. A `candle-s
 consumes both candle topics and persists them to ClickHouse and MinIO. Calculated candles are landing
 in ClickHouse under `source='spark_streaming'` and in MinIO under `calculated/candles/`.
 
-**What is still missing is validation, not data.** Reconciliation does not run, so nothing compares
-the calculated candles against Yahoo's. Feature engineering therefore still finds no reconciled
-candles and silently falls back to raw Yahoo ones, which means every indicator it produces is
-computed from unvalidated data.
+**What is still missing is scheduled validation and observability, not data.** Reconciliation works and compares ClickHouse candles over explicit windows, but Airflow DAGs start paused by default.
+Feature engineering still falls back to raw Yahoo candles when no reconciled candles are present in the query window, and does so silently — every indicator produced from fallback data is unvalidated.
 
 - **Feature engineering produces values, but unvalidated ones.** `analysis/features.py` reads
   reconciled candles, finds none, and falls back to `source='yahoo_finance'` — silently. Features
   are only as trustworthy as the reconciliation that never happened.
-- **Data quality checks run against the raw fallback.** `analysis/data_quality.py` queries the same
-  way, so its verdicts describe unreconciled candles and go to a log nobody reads.
-- **Reconciliation still reconciles nothing.** It consumes the two Kafka topics with a 10-second
-  consumer window on a 5-minute schedule and finds almost nothing.
+- **Data quality checks still run against the raw fallback.** `analysis/data_quality.py` queries the
+  same way, so its verdicts describe unreconciled candles and go to a log nobody reads.
 
-So storage is built and data flows; Milestone D (data quality) is still unbuilt. Earlier revisions of
+Reconciliation now works — it compares both series in ClickHouse over an explicit window and was
+verified producing all four statuses (`matched`, `corrected`, `raw_only`, `calculated_only`) against
+the live stack. What remains is instrumentation: nothing measures the coverage that reconciliation
+reports. Earlier revisions of
 this document claimed the whole pipeline ran "end-to-end" — that was wrong, and it persisted because
 nothing in the repository could check it. There is still no integration test, no CI, and no health
 check. The corrective work is gated by
@@ -41,18 +40,17 @@ check. The corrective work is gated by
 | Spark OHLCV aggregation | `streaming/stream_candle_builder.py` as `candle-builder` service | Event-time windows + watermark → `market.candles.calculated` |
 | Continuous tick sink | `storage/tick_sink.py` as `tick-sink` service | `market.ticks` → MinIO Parquet + ClickHouse, batched, with backoff |
 | Continuous candle sink | `storage/candle_sink.py` as `candle-sink` service | `market.candles.raw` + `.calculated` → ClickHouse + MinIO, routed per topic, validated against the candle schema with failures routed to `market.errors` |
-| Storage layer | `storage/minio_client.py`, `storage/clickhouse_client.py`, `storage/sinks.py` | Parquet and ClickHouse writers exist and work, but only `tick-sink` and reconciliation call them |
+| Storage layer | `storage/minio_client.py`, `storage/clickhouse_client.py`, `storage/sinks.py` | Parquet and ClickHouse writers exist and work; called by `tick-sink`, `candle-sink`, and reconciliation |
 | Data quality checks | `analysis/data_quality.py` via `dag_data_quality.py` | Completeness, uniqueness, OHLC validity, freshness, consistency |
 | Feature engineering | `analysis/features.py` | Returns, candle anatomy, EMA 9/21, RSI 14, ATR 14, rolling std, relative volume, VWAP, SPY/QQQ context |
 | Versioned schemas | `schemas/v1/*.schema.json` | Six Draft 2020-12 schemas, all `additionalProperties: false` |
-| Unit tests | `tests/` | 70 passing |
+| Unit tests | `tests/` | 87 passed, 1 skipped |
 
 ## What Does Not Work
 
 | Component | Location | Status |
 |-----------|----------|--------|
-| Reconciliation | `streaming/reconciliation.py` | **Broken** — see Debt #1. Rewrite specified by [ADR-009](DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation) |
-| Reconciled data consumption | `analysis/features.py` | **Silently degraded** — see Debt #2. ADR-007 is not satisfied in practice |
+| Reconciled data consumption | `analysis/features.py` | **Silently degraded** — see Debt #1 |
 | Verification | — | **Absent** — no `verify_pipeline`, no integration tests, no CI, no metrics |
 | Signal engine | — | Not started. Schema, ClickHouse table, and `sink_signals` exist with no producer |
 | Backtesting | — | Not started |
@@ -64,48 +62,35 @@ check. The corrective work is gated by
 
 Ranked by impact on the project's stated objective.
 
-1. **Reconciliation reads Kafka offsets and usually reconciles nothing.** `streaming/reconciliation.py:18`
-   opens `KafkaConsumer` with no `group_id`, `auto_offset_reset="latest"`, and
-   `consumer_timeout_ms=10000`. On a 5-minute DAG it only observes messages produced during its own
-   ~10-second window, and it drains the raw topic for the full 10s before starting on calculated — the
-   two windows do not overlap. Most runs reconcile zero candles, publish nothing, and skip the
-   ClickHouse and MinIO sinks. This defeats ADR-007 and is the single defect blocking Milestone D.
-   Resolution: [ADR-009](DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation).
+1. **The feature layer still falls back to unreconciled candles silently.**
+   `analysis/features.py:15` prefers `source='reconciled'` and falls back to `source='yahoo_finance'`
+   when reconciled returns empty. Reconciliation now produces rows, but the fallback should log
+   loudly so a regression is visible rather than silent. The fallback itself is reasonable
+   (reconciliation legitimately has not run yet on a fresh stack); failing quietly is not.
 
-2. **The silent fallback to unreconciled candles masks the above.** `analysis/features.py:15` prefers
-   `source='reconciled'` and falls back to `source='yahoo_finance'` when reconciled returns empty.
-   Now that candles are stored, this fallback fires on every run and silently produces features from
-   unvalidated data — no error, no alert. The fallback itself is reasonable (reconciliation
-   legitimately has not run yet); failing loudly is not.
-
-3. **Price tolerance in reconciliation is proportional, not absolute.** `_within_tolerance` computes
-   `tolerance * max(|a|, |b|, 1)`, so with `PRICE_TOLERANCE = 0.01` a \$600 stock is accepted within
-   **\$6.00** of the official value. A reconciliation that cannot detect a \$5 error is worse than no
-   reconciliation, because it reports `matched` and suppresses the alert.
-
-4. **Spark has no duplicate-event or late-event handling.** `stream_candle_builder.py` sets a 10-second
+2. **Spark has no duplicate-event or late-event handling.** `stream_candle_builder.py` sets a 10-second
    watermark and drops anything later, which is a defensible policy but an undocumented and untested
    one. `first`/`last` resolve by *ingestion* order rather than event-time order, so `open` and `close`
    can be wrong under shuffle. Neither duplicate nor late-event behavior has a test.
 
-5. **Reconnect uses a fixed 5-second sleep.** `ingestion/ticks.py:40` wraps the WebSocket in a retry
+3. **Reconnect uses a fixed 5-second sleep.** `ingestion/ticks.py:40` wraps the WebSocket in a retry
    loop with a constant delay; the sinks implement exponential backoff, so the services behave
    differently under the same broker failure.
 
-6. **Data-quality metrics are never emitted.** `analysis/data_quality.py` computes checks and logs
+4. **Data-quality metrics are never emitted.** `analysis/data_quality.py` computes checks and logs
    them. Nothing is trended, so a slowly degrading pipeline is indistinguishable from a healthy one.
 
-7. **No integration tests and no CI.** All tests are unit tests over pure logic, plus one that skips
+5. **No integration tests and no CI.** All tests are unit tests over pure logic, plus one that skips
    without a live ClickHouse. Four test files (`test_compose_*.py`, `test_config_validation.py`)
    assert on `docker-compose.yml` as a data structure — `mem_limit == "1280m"` — which locks
    configuration values without testing behavior and makes compose edits brittle. No GitHub Actions
    workflow exists.
 
-8. **Dev credentials are committed.** `minioadmin/minioadmin`, `postgres airflow/airflow`, Airflow
+6. **Dev credentials are committed.** `minioadmin/minioadmin`, `postgres airflow/airflow`, Airflow
    secret key `'developer-secret-key'`. `.env` parameterization landed (commit `e3236e7`) but the
    defaults are still weak. Acceptable locally; must rotate before any shared or cloud deployment.
 
-9. **Market-context features are empty by decision.** `analysis/features.py:97` reads SPY and QQQ,
+7. **Market-context features are empty by decision.** `analysis/features.py:97` reads SPY and QQQ,
    which are not in the configured symbol list. `compute_market_context` therefore returns nulls.
    This is expected until those symbols are subscribed — not a regression.
 
@@ -118,6 +103,8 @@ Ranked by impact on the project's stated objective.
 - [x] MinIO + ClickHouse in compose ([ADR-002](DECISIONS.md#adr-002-clickhouse--minio-dual-storage))
 - [x] Spark streaming produces calculated candles as a compose service (commit `a70415a`) — previously listed as debt
 - [x] Continuous Kafka→MinIO/ClickHouse tick sink as a compose service (commit `671eb41`) — previously listed as debt
+- [x] **Reconciliation rewritten against ClickHouse** ([ADR-009](DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)) — compares both series as a set over an explicit window; Kafka is no longer the read path. Verified producing `matched`, `corrected`, `raw_only` and `calculated_only` against the live stack, and idempotent across repeated runs over an overlapping window
+- [x] **Absolute price tolerance in reconciliation** — was proportional, which accepted a $6.00 error on a $600 stock
 - [x] **Continuous Kafka→MinIO/ClickHouse candle sink** for `market.candles.raw` and `.calculated`, routed per topic and schema-validated with failures routed to `market.errors`
 - [x] **Idempotent candle storage** — `market_candles` is `ReplacingMergeTree(created_at)` ordered by `(symbol, interval, timestamp, source)`, read with `FINAL` ([ADR-011](DECISIONS.md#adr-011-candle-storage-is-idempotent-by-key))
 - [x] ClickHouse made usable — the 512MB internal cap sat below the server's own baseline RSS and it could not answer even `SELECT 1`
@@ -133,12 +120,10 @@ Ranked by impact on the project's stated objective.
 
 **Gate — must pass before any trading work.** ([ADR-010](DECISIONS.md#adr-010-verification-gates-the-trading-stages))
 
-1. Rewrite reconciliation to compare candles in ClickHouse over an explicit time window ([ADR-009](DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)). Both series are now stored, so the comparison finally has real inputs.
-2. Correct the price tolerance to absolute.
-3. Build `verify_pipeline` — one command that reports tick arrival, calculated/raw/reconciled coverage,
+1. Build `verify_pipeline` — one command that reports tick arrival, calculated/raw/reconciled coverage,
    duplicate keys, OHLC violations, ingestion latency, and feature freshness, exiting non-zero on failure.
-4. Make the feature-layer fallback loud.
-5. Prove it: with the stack running, `verify_pipeline` exits 0 and reconciled coverage sits near 1.0 for
+2. Make the feature-layer fallback loud.
+3. Prove it: with the stack running, `verify_pipeline` exits 0 and reconciled coverage sits near 1.0 for
    a completed window.
 
 > **Operational note:** the Airflow DAGs are created paused

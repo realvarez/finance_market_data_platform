@@ -1,8 +1,17 @@
 """Unit tests for candle reconciliation logic (pure functions only)."""
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
-from streaming.reconciliation import _candle_key, _within_tolerance, reconcile_candle
+from streaming.reconciliation import (
+    _candle_key,
+    _price_within_tolerance,
+    _to_iso,
+    _to_payload,
+    _volume_within_tolerance,
+    reconcile_candle,
+)
 
 
 def make_raw(**overrides) -> dict:
@@ -44,23 +53,65 @@ class TestCandleKey:
         assert _candle_key(make_raw()) == "NVDA:1m:2026-08-22T15:30:00Z"
 
 
-class TestWithinTolerance:
+class TestPriceTolerance:
+    """Price tolerance is absolute. A proportional rule accepted a $6.00 error on a $600 stock."""
+
     def test_identical_values(self):
-        assert _within_tolerance(100.0, 100.0, 0.01)
+        assert _price_within_tolerance(100.0, 100.0)
 
-    def test_small_difference_within_tolerance(self):
-        assert _within_tolerance(100.0, 100.9, 0.01)
+    def test_one_cent_within_tolerance(self):
+        assert _price_within_tolerance(100.0, 100.01)
 
-    def test_large_difference_beyond_tolerance(self):
-        assert not _within_tolerance(100.0, 105.0, 0.01)
+    def test_five_cents_outside_tolerance(self):
+        assert not _price_within_tolerance(100.0, 100.05)
+
+    def test_expensive_asset_is_not_given_a_wider_leash(self):
+        """Regression: 0.01 * 600 = $6.00 used to pass."""
+        assert not _price_within_tolerance(600.0, 605.0)
+        assert _price_within_tolerance(600.0, 600.005)
+
+    def test_cheap_asset_uses_the_same_absolute_leash(self):
+        assert not _price_within_tolerance(3.0, 3.02)
+
+
+class TestVolumeTolerance:
+    """Volume stays relative — legitimate rounding differs by more than a cent."""
+
+    def test_identical(self):
+        assert _volume_within_tolerance(5000, 5000)
+
+    def test_four_percent_within(self):
+        assert _volume_within_tolerance(1000, 1040)
+
+    def test_forty_percent_outside(self):
+        assert not _volume_within_tolerance(1000, 1400)
 
     def test_both_zero(self):
-        assert _within_tolerance(0.0, 0.0, 0.05)
+        assert _volume_within_tolerance(0, 0)
 
-    def test_zero_vs_nonzero_uses_absolute_floor(self):
-        # tolerance * max(0, x, 1) = 0.05 -> within
-        assert _within_tolerance(0.0, 0.04, 0.05)
-        assert not _within_tolerance(0.0, 0.10, 0.05)
+
+class TestPayloadNormalisation:
+    def test_naive_clickhouse_datetime_becomes_iso_utc(self):
+        assert _to_iso(datetime(2026, 8, 22, 15, 30)) == "2026-08-22T15:30:00Z"
+
+    def test_aware_datetime_is_converted_to_utc(self):
+        aware = datetime(2026, 8, 22, 17, 30, tzinfo=timezone(timedelta(hours=2)))
+        assert _to_iso(aware) == "2026-08-22T15:30:00Z"
+
+    def test_string_passes_through_unchanged(self):
+        assert _to_iso("2026-08-22T15:30:00Z") == "2026-08-22T15:30:00Z"
+
+    def test_payload_converts_both_time_fields(self):
+        payload = _to_payload(
+            {
+                "timestamp": datetime(2026, 8, 22, 15, 30),
+                "created_at": datetime(2026, 8, 22, 15, 31),
+                "close": 1.0,
+            }
+        )
+        assert payload["timestamp"] == "2026-08-22T15:30:00Z"
+        assert payload["created_at"] == "2026-08-22T15:31:00Z"
+        assert payload["close"] == 1.0
 
 
 class TestReconcileCandle:
