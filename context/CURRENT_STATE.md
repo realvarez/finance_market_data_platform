@@ -10,10 +10,8 @@ and Yahoo's official candles reach `market.candles.raw` on schedule. A `candle-s
 consumes both candle topics and persists them to ClickHouse and MinIO. Calculated candles are landing
 in ClickHouse under `source='spark_streaming'` and in MinIO under `calculated/candles/`.
 
-**What is still missing is validation, not data.** Reconciliation does not run, so nothing compares
-the calculated candles against Yahoo's. Feature engineering therefore still finds no reconciled
-candles and silently falls back to raw Yahoo ones, which means every indicator it produces is
-computed from unvalidated data.
+**What is still missing is scheduled validation and observability, not data.** Reconciliation works and compares ClickHouse candles over explicit windows, but Airflow DAGs start paused by default.
+Feature engineering still falls back to raw Yahoo candles when no reconciled candles are present in the query window, and does so silently — every indicator produced from fallback data is unvalidated.
 
 - **Feature engineering produces values, but unvalidated ones.** `analysis/features.py` reads
   reconciled candles, finds none, and falls back to `source='yahoo_finance'` — silently. Features
@@ -42,11 +40,11 @@ check. The corrective work is gated by
 | Spark OHLCV aggregation | `streaming/stream_candle_builder.py` as `candle-builder` service | Event-time windows + watermark → `market.candles.calculated` |
 | Continuous tick sink | `storage/tick_sink.py` as `tick-sink` service | `market.ticks` → MinIO Parquet + ClickHouse, batched, with backoff |
 | Continuous candle sink | `storage/candle_sink.py` as `candle-sink` service | `market.candles.raw` + `.calculated` → ClickHouse + MinIO, routed per topic, validated against the candle schema with failures routed to `market.errors` |
-| Storage layer | `storage/minio_client.py`, `storage/clickhouse_client.py`, `storage/sinks.py` | Parquet and ClickHouse writers exist and work, but only `tick-sink` and reconciliation call them |
+| Storage layer | `storage/minio_client.py`, `storage/clickhouse_client.py`, `storage/sinks.py` | Parquet and ClickHouse writers exist and work; called by `tick-sink`, `candle-sink`, and reconciliation |
 | Data quality checks | `analysis/data_quality.py` via `dag_data_quality.py` | Completeness, uniqueness, OHLC validity, freshness, consistency |
 | Feature engineering | `analysis/features.py` | Returns, candle anatomy, EMA 9/21, RSI 14, ATR 14, rolling std, relative volume, VWAP, SPY/QQQ context |
 | Versioned schemas | `schemas/v1/*.schema.json` | Six Draft 2020-12 schemas, all `additionalProperties: false` |
-| Unit tests | `tests/` | 70 passing |
+| Unit tests | `tests/` | 87 passed, 1 skipped |
 
 ## What Does Not Work
 
@@ -122,12 +120,10 @@ Ranked by impact on the project's stated objective.
 
 **Gate — must pass before any trading work.** ([ADR-010](DECISIONS.md#adr-010-verification-gates-the-trading-stages))
 
-1. Rewrite reconciliation to compare candles in ClickHouse over an explicit time window ([ADR-009](DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)). Both series are now stored, so the comparison finally has real inputs.
-2. Correct the price tolerance to absolute.
-3. Build `verify_pipeline` — one command that reports tick arrival, calculated/raw/reconciled coverage,
+1. Build `verify_pipeline` — one command that reports tick arrival, calculated/raw/reconciled coverage,
    duplicate keys, OHLC violations, ingestion latency, and feature freshness, exiting non-zero on failure.
-4. Make the feature-layer fallback loud.
-5. Prove it: with the stack running, `verify_pipeline` exits 0 and reconciled coverage sits near 1.0 for
+2. Make the feature-layer fallback loud.
+3. Prove it: with the stack running, `verify_pipeline` exits 0 and reconciled coverage sits near 1.0 for
    a completed window.
 
 > **Operational note:** the Airflow DAGs are created paused

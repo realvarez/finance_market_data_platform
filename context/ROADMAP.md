@@ -7,8 +7,7 @@ percentages ("In Progress ~70%"), which described effort rather than behavior an
 checked against the code. A phase is complete when it demonstrably works — not when most of it has
 been written.
 
-See [CURRENT_STATE.md](CURRENT_STATE.md) for what is broken in the code that exists today, and
-[DECISIONS.md](DECISIONS.md) for the architectural decisions each phase implements.
+See [CURRENT_STATE.md](CURRENT_STATE.md) for what is broken in the code that exists today, and [DECISIONS.md](DECISIONS.md) for the architectural decisions each phase implements.
 
 ---
 
@@ -174,16 +173,15 @@ to validate are not yet guaranteed.
 ---
 
 ### Phase 9 — ClickHouse Analytical Storage
-**Status:** Complete (pending ADR-011)
+**Status:** Complete
 
 - [x] ClickHouse in Docker Compose, memory-capped
 - [x] DDL for `market_ticks`, `market_candles`, `market_features`
 - [x] DDL for `market_signals`, `market_orders`, `market_trades`, `market_positions`
 - [x] Client and parameterized queries in `storage/clickhouse_client.py`
-- [ ] **Idempotent candle storage** — migrate `market_candles` to `ReplacingMergeTree(replaced_at)`
+- [x] **Idempotent candle storage** — migrated `market_candles` to `ReplacingMergeTree(created_at)`
       ordered by `(symbol, interval, timestamp, source)` and read with `FINAL`
-      ([ADR-011](DECISIONS.md#adr-011-candle-storage-is-idempotent-by-key)). Required before
-      reconciliation can re-run over overlapping windows
+      ([ADR-011](DECISIONS.md#adr-011-candle-storage-is-idempotent-by-key))
 - [ ] Example analytical queries documented against real schemas
 
 **Note:** the trading tables exist as DDL only. No code writes orders, trades, or positions.
@@ -195,20 +193,13 @@ to validate are not yet guaranteed.
 ### Phase 8 — Candle Reconciliation
 **Status:** Complete
 
-- [x] Compare calculated vs raw OHLCV as a set over an explicit time window in ClickHouse
-      ([ADR-009](DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)).
-      The previous implementation consumed Kafka offsets with a 10-second window on a 5-minute DAG
-      and reconciled nothing
-- [x] **Absolute price tolerance.** Was proportional — `0.01 * max(|a|,|b|,1)` accepted a $6.00
-      error on a $600 stock, so the check could not catch the discrepancies it exists to detect.
-      Volume stays relative at 5%
+- [x] Compare calculated vs raw OHLCV as a set over an explicit time window in ClickHouse ([ADR-009](DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)). The previous implementation consumed Kafka offsets with a 10-second window on a 5-minute DAG and reconciled nothing
+- [x] **Absolute price tolerance.** Was proportional — `0.01 * max(|a|,|b|,1)` accepted a $6.00 error on a $600 stock, so the check could not catch the discrepancies it exists to detect. Volume stays relative at 5%
 - [x] Idempotent across repeated runs over an overlapping window (via ADR-011)
 - [x] Replay of any historical window, which the Kafka-offset design could never do
 - [x] Window and coverage ratio logged on every run
-- [x] All four statuses verified against the live stack: `matched`, `corrected`, `raw_only`,
-      `calculated_only`
-- [ ] **Data-quality metrics emission** — coverage is logged but never trended, so gradual degradation
-      stays invisible. Folded into the verification gate
+- [x] All four statuses verified against the live stack: `matched`, `corrected`, `raw_only`, `calculated_only`
+- [ ] **Data-quality metrics emission** — coverage is logged but never trended, so gradual degradation stays invisible. Folded into the verification gate
 
 **Acceptance:** reconciled coverage ≥ 99% of official candles over a completed session — verified
 live for a single window; a full session still needs market hours.
@@ -392,7 +383,7 @@ Not a numbered phase, but the work that unblocks everything downstream
 - [ ] Structured logging with correlation IDs across services
 - [ ] Healthchecks on every compose service
 - [ ] Data-quality metric trending in ClickHouse
-- [x] `verify_pipeline` as the minimum viable health signal (deferred work — see gate)
+- [ ] `verify_pipeline` as the minimum viable health signal (deferred work — see gate)
 
 **Deferred by decision (October 2026):** the Prometheus/Grafana stack was explicitly deferred in
 favor of the single `verify_pipeline` command, which answers the same "is it working?" question more
@@ -446,8 +437,8 @@ candle sources out of ClickHouse to compare them ([ADR-009](DECISIONS.md#adr-009
 An earlier revision of this graph placed Phase 9 downstream of Phase 8, which inverted the real
 dependency and obscured why the reconciliation stage was blocked.
 
-Candle persistence (Phase 5) precedes all of it: nothing writes candles to storage today, so
-ClickHouse is empty and every reader downstream sees nothing.
+Candle persistence (Phase 5) precedes all of it: both raw and calculated candles are now persisted
+to ClickHouse and MinIO via `candle-sink`.
 
 ```mermaid
 flowchart TD

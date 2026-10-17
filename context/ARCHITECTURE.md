@@ -73,6 +73,7 @@ flowchart TB
 |---------|------|----------------|
 | `tick_service.py` | Long-running | WebSocket → `market.ticks` |
 | `tick_sink_service.py` | Long-running | `market.ticks` → MinIO Parquet + ClickHouse |
+| `candle_sink_service.py` | Long-running | `market.candles.raw` + `.calculated` → MinIO Parquet + ClickHouse |
 
 ### Orchestration (`airflow/dags/`)
 
@@ -83,7 +84,7 @@ Thin DAGs that call `ingestion/` functions. No business logic.
 | `market_candles_1m_dag` (`dag_candles.py`) | Every minute + 10s | `ingestion.candles.fetch_latest_candles(interval='1m')` |
 | `market_candles_5m_dag` (`dag_candles.py`) | Every 5 min + 10s | `ingestion.candles.fetch_latest_candles(interval='5m')` |
 | `market_candles_backfill_dag` (`dag_backfill.py`) | Manual trigger | `ingestion.candles.fetch_candles_range()` — chunked |
-| `market_reconciliation_dag` | Every 5 min | `streaming.reconciliation.reconcile_candles()` — **broken, see below** |
+| `market_reconciliation_dag` | Every 5 min | `streaming.reconciliation.reconcile_candles()` — compares ClickHouse candles over an explicit window |
 | `market_data_quality_dag` | Hourly | `analysis.data_quality.run_checks()` → `analysis.features.generate_features()` |
 
 ### Streaming (`streaming/`)
@@ -94,9 +95,7 @@ Thin DAGs that call `ingestion/` functions. No business logic.
 | `reconciliation.py` | Compare calculated vs raw candles |
 | `spark_utils.py` | Spark session, Kafka read/write helpers |
 
-> Reconciliation reads both candle series out of ClickHouse over an explicit time window, with Kafka
-> as pure transport ([ADR-009](DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)).
-> It no longer consumes topic offsets.
+> Reconciliation reads both candle series out of ClickHouse over an explicit time window, with Kafka as pure transport ([ADR-009](DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)). It no longer consumes topic offsets.
 
 ### Storage (`storage/`)
 
@@ -105,7 +104,9 @@ Thin DAGs that call `ingestion/` functions. No business logic.
 | `minio_client.py` | S3-compatible Parquet writes |
 | `clickhouse_client.py` | Analytical inserts and queries |
 | `sinks.py` | Unified sink interface for ticks/candles |
+| `kafka_sink.py` | Reusable batching consumer framework for Kafka-to-storage sinks |
 | `tick_sink.py` | Long-running consumer: `market.ticks` → MinIO + ClickHouse, batched with backoff |
+| `candle_sink.py` | Long-running consumer: `market.candles.raw` + `.calculated` → MinIO + ClickHouse |
 
 ### Analysis (`analysis/`)
 
@@ -119,8 +120,8 @@ Thin DAGs that call `ingestion/` functions. No business logic.
 | Topic | Producer | Consumer |
 |-------|----------|----------|
 | `market.ticks` | Tick service | Spark, tick sink |
-| `market.candles.raw` | Airflow candle DAGs | Reconciliation — **no storage consumer exists yet** |
-| `market.candles.calculated` | Spark streaming | Reconciliation — **no storage consumer exists yet** |
+| `market.candles.raw` | Airflow candle DAGs | `candle-sink` service |
+| `market.candles.calculated` | Spark streaming | `candle-sink` service |
 | `market.candles.reconciled` | Reconciliation | ClickHouse, MinIO, features |
 | `market.signals` | Signal engine | Risk engine, API |
 | `market.errors` | All ingestion | **none — topic is written but never consumed** |
@@ -130,8 +131,9 @@ Thin DAGs that call `ingestion/` functions. No business logic.
 ```
 market-data/
   raw/ticks/symbol=AAPL/year=2026/month=08/day=12/*.parquet
-  raw/candles/source=raw/symbol=AAPL/interval=1m/year=2026/month=08/day=12/*.parquet
-  reconciled/candles/symbol=AAPL/interval=1m/year=2026/month=08/day=12/*.parquet
+  raw/candles/symbol=AAPL/year=2026/month=08/day=12/interval=1m/source=yahoo_finance/*.parquet
+  calculated/candles/symbol=AAPL/year=2026/month=08/day=12/interval=1m/source=spark_streaming/*.parquet
+  reconciled/candles/symbol=AAPL/year=2026/month=08/day=12/interval=1m/source=reconciled/*.parquet
 ```
 
 ## ClickHouse Tables
@@ -147,10 +149,7 @@ All in database `market_platform` (`infra/clickhouse/init.sql`):
 | `market_orders`, `market_trades` | Trading state | *not yet — DDL only* |
 | `market_positions` | Current positions | *not yet — DDL only* |
 
-`market_candles` is currently a plain `MergeTree`, so re-writing the same candle key duplicates rows.
-It is being migrated to `ReplacingMergeTree(replaced_at)` ordered by
-`(symbol, interval, timestamp, source)` so reconciliation can re-run over overlapping windows
-([ADR-011](DECISIONS.md#adr-011-candle-storage-is-idempotent-by-key)).
+`market_candles` is an idempotent `ReplacingMergeTree(created_at)` ordered by `(symbol, interval, timestamp, source)` and queried with `FINAL` ([ADR-011](DECISIONS.md#adr-011-candle-storage-is-idempotent-by-key)).
 
 ## Technology Stack
 

@@ -75,10 +75,9 @@ environment:
 1. Open http://localhost:8080 (no login required in dev mode)
 2. Unpause the candle and reconciliation DAGs
 
-> **Known issue:** the reconciliation DAG currently reconciles nothing — it reads Kafka topic offsets
-> with a 10-second window on a 5-minute schedule. It is being rewritten to compare candles in
-> ClickHouse. See [context/CURRENT_STATE.md](../context/CURRENT_STATE.md) and
-> [ADR-009](../context/DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation).
+> **Operational note:** the Airflow DAGs are created paused by default. Reconciliation reads both
+> candle series directly from ClickHouse ([ADR-009](../context/DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation));
+> the loud fallback and `verify_pipeline` gate remain pending.
 
 ## Run Spark Streaming Locally
 

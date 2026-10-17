@@ -15,10 +15,10 @@
 
 | Topic | Producers | Consumers |
 |-------|-----------|-----------|
-| `market.ticks` | tick-ingestion service | Spark candle builder, MinIO sink |
-| `market.candles.raw` | Airflow candle DAGs | Reconciliation, ClickHouse |
-| `market.candles.calculated` | Spark candle builder | Reconciliation, ClickHouse |
-| `market.candles.reconciled` | Reconciliation job | ClickHouse, MinIO, Feature engine |
+| `market.ticks` | tick-ingestion service | Spark candle builder, tick-sink |
+| `market.candles.raw` | Airflow candle DAGs | candle-sink |
+| `market.candles.calculated` | Spark candle builder | candle-sink |
+| `market.candles.reconciled` | Reconciliation job | Feature engine |
 | `market.signals` | Signal engine (future) | Risk engine, API |
 | `market.errors` | All ingestion services | Monitoring |
 
@@ -105,13 +105,9 @@ echo '{"event_id":"TEST20260812143000","symbol":"TEST","timestamp":"2026-08-12T1
 
 ## Reconciliation and Topic Retention
 
-Reconciliation currently compares candles by consuming `market.candles.raw` and
-`market.candles.calculated` directly. This is known to be broken — a 10-second consumer window on a
-5-minute schedule usually sees nothing, and both series are subject to retention expiry.
-
-It is being rewritten to read both series from ClickHouse over an explicit time window and treat Kafka
-as pure transport ([ADR-009](../context/DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)).
-Until then, do not rely on `market.candles.reconciled` containing anything.
+Reconciliation reads both candle series from ClickHouse over an explicit time window and treats Kafka
+as pure transport ([ADR-009](../context/DECISIONS.md#adr-009-clickhouse-is-the-source-of-truth-for-reconciliation)),
+so topic retention no longer affects it. It still publishes to `market.candles.reconciled`.
 
 ## Bootstrap Servers
 

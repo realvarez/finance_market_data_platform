@@ -363,7 +363,7 @@ Put the rewritten reconciliation on the schedule, and stop the feature layer fro
 
 ### Changes
 
-DAG: point the existing task at the new function signature. Nothing else. Zero business logic in the
+DAG: point the existing task at the new function signature. *(Done in commit `6411594`: `airflow/dags/dag_reconciliation.py` updated).* Nothing else. Zero business logic in the
 DAG file — that rule is
 [ADR-005](../../context/DECISIONS.md#adr-005-thin-airflow-dags) and is currently respected.
 
@@ -463,7 +463,7 @@ Then update the documentation to record the resolutions:
 - `context/CURRENT_STATE.md` — resolve Debt #1–#5, move the storage/reconciliation rows to "What
   Works", rewrite the summary
 - `context/ROADMAP.md` — Phase 5 → Complete, Phase 8 → Complete, Phase 9 → Complete; un-gate Phase 14
-- `context/DECISIONS.md` — amend ADR-011 if you reused `created_at` instead of adding `replaced_at`
+- `context/DECISIONS.md` — amend ADR-011 if you reused `created_at` instead of adding `replaced_at` *(Done: amended to `ReplacingMergeTree(created_at)`)*
 
 ---
 
